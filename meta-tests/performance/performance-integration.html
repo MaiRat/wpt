@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Performance Integration — Consolidated Performance API Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://w3c.github.io/hr-time/">
+<link rel="help" href="https://w3c.github.io/user-timing/">
+<link rel="help" href="https://w3c.github.io/performance-timeline/">
+<link rel="help" href="https://w3c.github.io/resource-timing/">
+<link rel="help" href="https://w3c.github.io/navigation-timing/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: performance/performance-integration.html
+  Exercises browser Performance APIs together in a single integrated page:
+  High Resolution Time, User Timing, Performance Timeline, and related
+  entry management.
+
+  Covers atomic test areas:
+    - hr-time/ (performance.now, performance.timeOrigin)
+    - user-timing/ (performance.mark, performance.measure)
+    - performance-timeline/ (PerformanceObserver, getEntries)
+    - resource-timing/ (PerformanceResourceTiming basics)
+    - navigation-timing/ (PerformanceNavigationTiming basics)
+-->
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// =============================================================
+// 1. High Resolution Time — performance.now() and timeOrigin
+// Covers: hr-time/basic.any.js
+//         hr-time/timeOrigin.html
+// =============================================================
+
+test(function () {
+  assert_true("performance" in window,
+    "window.performance should exist");
+  assert_true(performance instanceof Performance,
+    "performance should be an instance of Performance");
+}, "HR-Time: performance object exists and is a Performance instance");
+
+test(function () {
+  var now = performance.now();
+  assert_equals(typeof now, "number",
+    "performance.now() should return a number");
+  assert_greater_than(now, 0,
+    "performance.now() should be greater than zero");
+}, "HR-Time: performance.now() returns a positive number");
+
+test(function () {
+  var t1 = performance.now();
+  var t2 = performance.now();
+  assert_greater_than_equal(t2, t1,
+    "successive calls to performance.now() should be monotonic");
+}, "HR-Time: performance.now() is monotonically non-decreasing");
+
+test(function () {
+  assert_equals(typeof performance.timeOrigin, "number",
+    "performance.timeOrigin should be a number");
+  assert_greater_than(performance.timeOrigin, 0,
+    "performance.timeOrigin should be positive");
+}, "HR-Time: performance.timeOrigin is a positive number");
+
+test(function () {
+  var json = performance.toJSON();
+  assert_equals(typeof json, "object",
+    "performance.toJSON() should return an object");
+  assert_equals(json.timeOrigin, performance.timeOrigin,
+    "toJSON().timeOrigin should match performance.timeOrigin");
+}, "HR-Time: performance.toJSON() includes timeOrigin");
+
+// =============================================================
+// 2. User Timing — performance.mark() and performance.measure()
+// Covers: user-timing/mark-entry-constructor.any.js
+//         user-timing/mark-l3.any.js
+//         user-timing/clearMarks.html
+//         user-timing/clearMeasures.html
+// =============================================================
+
+test(function () {
+  performance.clearMarks();
+  var mark = performance.mark("test-mark");
+  assert_equals(mark.entryType, "mark",
+    "mark entryType should be 'mark'");
+  assert_equals(mark.name, "test-mark",
+    "mark name should match");
+  assert_equals(typeof mark.startTime, "number",
+    "mark startTime should be a number");
+  assert_equals(mark.duration, 0,
+    "mark duration should be 0");
+  performance.clearMarks();
+}, "User Timing: performance.mark() creates a PerformanceMark");
+
+test(function () {
+  performance.clearMarks();
+  var mark = performance.mark("detail-mark", { detail: { key: "value" } });
+  assert_equals(mark.name, "detail-mark",
+    "mark with detail should have correct name");
+  performance.clearMarks();
+}, "User Timing: performance.mark() accepts options with detail");
+
+test(function () {
+  performance.clearMarks();
+  performance.mark("mark-a");
+  performance.mark("mark-b");
+  var entries = performance.getEntriesByType("mark");
+  var names = [];
+  for (var i = 0; i < entries.length; i++) {
+    names.push(entries[i].name);
+  }
+  assert_true(names.indexOf("mark-a") !== -1,
+    "mark-a should be in mark entries");
+  assert_true(names.indexOf("mark-b") !== -1,
+    "mark-b should be in mark entries");
+  performance.clearMarks();
+}, "User Timing: multiple marks are retrievable via getEntriesByType");
+
+test(function () {
+  performance.clearMarks();
+  performance.mark("to-clear");
+  performance.clearMarks("to-clear");
+  var entries = performance.getEntriesByName("to-clear");
+  assert_equals(entries.length, 0,
+    "clearMarks should remove the named mark");
+  performance.clearMarks();
+}, "User Timing: clearMarks() removes specific mark by name");
+
+test(function () {
+  performance.clearMarks();
+  performance.mark("a");
+  performance.mark("b");
+  performance.clearMarks();
+  var entries = performance.getEntriesByType("mark");
+  assert_equals(entries.length, 0,
+    "clearMarks() with no argument should remove all marks");
+}, "User Timing: clearMarks() with no argument removes all marks");
+
+test(function () {
+  performance.clearMarks();
+  performance.clearMeasures();
+  performance.mark("start-m");
+  performance.mark("end-m");
+  var measure = performance.measure("test-measure", "start-m", "end-m");
+  assert_equals(measure.entryType, "measure",
+    "measure entryType should be 'measure'");
+  assert_equals(measure.name, "test-measure",
+    "measure name should match");
+  assert_equals(typeof measure.startTime, "number",
+    "measure startTime should be a number");
+  assert_equals(typeof measure.duration, "number",
+    "measure duration should be a number");
+  assert_greater_than_equal(measure.duration, 0,
+    "measure duration should be non-negative");
+  performance.clearMarks();
+  performance.clearMeasures();
+}, "User Timing: performance.measure() creates a PerformanceMeasure between marks");
+
+test(function () {
+  performance.clearMeasures();
+  performance.clearMarks();
+  var measure = performance.measure("no-arg-measure");
+  assert_equals(measure.name, "no-arg-measure",
+    "measure with no start/end should have correct name");
+  assert_equals(typeof measure.startTime, "number",
+    "measure startTime should be a number");
+  performance.clearMeasures();
+}, "User Timing: performance.measure() with no start/end mark uses defaults");
+
+test(function () {
+  performance.clearMeasures();
+  performance.clearMarks();
+  performance.mark("ms");
+  performance.measure("m1", "ms");
+  performance.measure("m2", "ms");
+  performance.clearMeasures("m1");
+  var entries = performance.getEntriesByName("m1");
+  assert_equals(entries.length, 0,
+    "clearMeasures should remove the named measure");
+  var remaining = performance.getEntriesByName("m2");
+  assert_equals(remaining.length, 1,
+    "other measures should not be affected");
+  performance.clearMarks();
+  performance.clearMeasures();
+}, "User Timing: clearMeasures() removes specific measure by name");
+
+// =============================================================
+// 3. Performance Timeline — getEntries, getEntriesByType,
+//    getEntriesByName
+// Covers: performance-timeline/get-invalid-entries.html
+//         performance-timeline/idlharness.any.js
+// =============================================================
+
+test(function () {
+  var entries = performance.getEntries();
+  assert_true(Array.isArray(entries),
+    "getEntries() should return an array");
+  for (var i = 0; i < entries.length; i++) {
+    assert_true("name" in entries[i], "entry should have name");
+    assert_true("entryType" in entries[i], "entry should have entryType");
+    assert_true("startTime" in entries[i], "entry should have startTime");
+    assert_true("duration" in entries[i], "entry should have duration");
+  }
+}, "Performance Timeline: getEntries() returns array of PerformanceEntry");
+
+test(function () {
+  var entries = performance.getEntriesByType("navigation");
+  assert_true(Array.isArray(entries),
+    "getEntriesByType should return an array");
+  if (entries.length > 0) {
+    assert_equals(entries[0].entryType, "navigation",
+      "entry should have entryType 'navigation'");
+  }
+}, "Performance Timeline: getEntriesByType('navigation') returns navigation entries");
+
+test(function () {
+  performance.clearMarks();
+  performance.mark("named-entry");
+  var entries = performance.getEntriesByName("named-entry");
+  assert_true(entries.length >= 1,
+    "getEntriesByName should find the mark");
+  assert_equals(entries[0].name, "named-entry",
+    "entry name should match");
+  performance.clearMarks();
+}, "Performance Timeline: getEntriesByName() returns matching entries");
+
+test(function () {
+  performance.clearMarks();
+  performance.mark("typed-entry");
+  var entries = performance.getEntriesByName("typed-entry", "mark");
+  assert_true(entries.length >= 1,
+    "getEntriesByName with type should find the mark");
+  assert_equals(entries[0].entryType, "mark",
+    "entry entryType should match filter");
+  performance.clearMarks();
+}, "Performance Timeline: getEntriesByName() with type filter");
+
+test(function () {
+  var entries = performance.getEntriesByType("nonexistent-type");
+  assert_true(Array.isArray(entries),
+    "should return an array");
+  assert_equals(entries.length, 0,
+    "unknown type should return empty array");
+}, "Performance Timeline: getEntriesByType() with unknown type returns empty array");
+
+// =============================================================
+// 4. PerformanceObserver
+// Covers: performance-timeline/buffered-flag-observer.any.js
+//         performance-timeline/multiple-buffered-flag-observers.any.js
+// =============================================================
+
+test(function () {
+  assert_true("PerformanceObserver" in window,
+    "PerformanceObserver should be defined");
+  assert_equals(typeof PerformanceObserver, "function",
+    "PerformanceObserver should be a constructor");
+}, "Performance Timeline: PerformanceObserver constructor exists");
+
+test(function () {
+  assert_true("supportedEntryTypes" in PerformanceObserver,
+    "PerformanceObserver.supportedEntryTypes should exist");
+  var types = PerformanceObserver.supportedEntryTypes;
+  assert_true(Array.isArray(types),
+    "supportedEntryTypes should be an array");
+  assert_true(types.length > 0,
+    "supportedEntryTypes should not be empty");
+  assert_true(types.indexOf("mark") !== -1,
+    "supportedEntryTypes should include 'mark'");
+  assert_true(types.indexOf("measure") !== -1,
+    "supportedEntryTypes should include 'measure'");
+}, "Performance Timeline: PerformanceObserver.supportedEntryTypes includes mark and measure");
+
+async_test(function (t) {
+  performance.clearMarks();
+  var observer = new PerformanceObserver(t.step_func_done(function (list) {
+    var entries = list.getEntries();
+    assert_true(entries.length >= 1,
+      "observer should receive at least one entry");
+    var found = false;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].name === "observed-mark") found = true;
+    }
+    assert_true(found,
+      "observer should receive the 'observed-mark' entry");
+    observer.disconnect();
+    performance.clearMarks();
+  }));
+  observer.observe({ type: "mark" });
+  performance.mark("observed-mark");
+}, "Performance Timeline: PerformanceObserver observes mark entries");
+
+async_test(function (t) {
+  performance.clearMeasures();
+  performance.clearMarks();
+  var observer = new PerformanceObserver(t.step_func_done(function (list) {
+    var entries = list.getEntries();
+    assert_true(entries.length >= 1,
+      "observer should receive at least one entry");
+    var found = false;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].name === "observed-measure") found = true;
+    }
+    assert_true(found,
+      "observer should receive the 'observed-measure' entry");
+    observer.disconnect();
+    performance.clearMeasures();
+  }));
+  observer.observe({ type: "measure" });
+  performance.measure("observed-measure");
+}, "Performance Timeline: PerformanceObserver observes measure entries");
+
+test(function () {
+  var observer = new PerformanceObserver(function () {});
+  observer.observe({ type: "mark" });
+  observer.disconnect();
+  // Disconnecting twice should not throw
+  observer.disconnect();
+}, "Performance Timeline: PerformanceObserver disconnect is idempotent");
+
+// =============================================================
+// 5. Navigation Timing
+// Covers: navigation-timing/ (PerformanceNavigationTiming)
+// =============================================================
+
+test(function () {
+  var entries = performance.getEntriesByType("navigation");
+  assert_true(Array.isArray(entries),
+    "getEntriesByType('navigation') should return an array");
+  // In a browsing context there should be exactly one navigation entry
+  if (entries.length > 0) {
+    var nav = entries[0];
+    assert_equals(nav.entryType, "navigation",
+      "entryType should be 'navigation'");
+    assert_equals(typeof nav.startTime, "number",
+      "startTime should be a number");
+    assert_equals(typeof nav.duration, "number",
+      "duration should be a number");
+  }
+}, "Navigation Timing: navigation entry exists with correct entryType");
+
+test(function () {
+  var entries = performance.getEntriesByType("navigation");
+  if (entries.length > 0) {
+    var nav = entries[0];
+    assert_equals(typeof nav.domContentLoadedEventStart, "number",
+      "domContentLoadedEventStart should be a number");
+    assert_equals(typeof nav.domContentLoadedEventEnd, "number",
+      "domContentLoadedEventEnd should be a number");
+    assert_equals(typeof nav.loadEventStart, "number",
+      "loadEventStart should be a number");
+    assert_equals(typeof nav.loadEventEnd, "number",
+      "loadEventEnd should be a number");
+  }
+}, "Navigation Timing: navigation entry includes DOM event timestamps");
+
+test(function () {
+  var entries = performance.getEntriesByType("navigation");
+  if (entries.length > 0) {
+    var nav = entries[0];
+    assert_equals(typeof nav.redirectCount, "number",
+      "redirectCount should be a number");
+    assert_equals(typeof nav.type, "string",
+      "type should be a string");
+    var validTypes = ["navigate", "reload", "back_forward", "prerender"];
+    assert_true(validTypes.indexOf(nav.type) !== -1,
+      "type should be one of the valid navigation types");
+  }
+}, "Navigation Timing: navigation entry has redirectCount and type");
+
+// =============================================================
+// 6. Resource Timing basics
+// Covers: resource-timing/ (PerformanceResourceTiming)
+// =============================================================
+
+test(function () {
+  var entries = performance.getEntriesByType("resource");
+  assert_true(Array.isArray(entries),
+    "getEntriesByType('resource') should return an array");
+  // The page loads testharness.js so there should be at least one resource
+  assert_true(entries.length > 0,
+    "there should be at least one resource timing entry");
+  var entry = entries[0];
+  assert_equals(entry.entryType, "resource",
+    "entryType should be 'resource'");
+  assert_equals(typeof entry.name, "string",
+    "name should be a string (the resource URL)");
+}, "Resource Timing: resource entries exist for loaded scripts");
+
+test(function () {
+  var entries = performance.getEntriesByType("resource");
+  if (entries.length > 0) {
+    var entry = entries[0];
+    assert_equals(typeof entry.startTime, "number",
+      "startTime should be a number");
+    assert_equals(typeof entry.duration, "number",
+      "duration should be a number");
+    assert_equals(typeof entry.fetchStart, "number",
+      "fetchStart should be a number");
+    assert_equals(typeof entry.responseEnd, "number",
+      "responseEnd should be a number");
+  }
+}, "Resource Timing: resource entry includes timing attributes");
+
+test(function () {
+  var entries = performance.getEntriesByType("resource");
+  if (entries.length > 0) {
+    var entry = entries[0];
+    assert_equals(typeof entry.initiatorType, "string",
+      "initiatorType should be a string");
+    assert_equals(typeof entry.transferSize, "number",
+      "transferSize should be a number");
+  }
+}, "Resource Timing: resource entry includes initiatorType and transferSize");
+
+// =============================================================
+// 7. PerformanceEntry interface
+// Covers: performance-timeline/idlharness.any.js
+// =============================================================
+
+test(function () {
+  performance.clearMarks();
+  var mark = performance.mark("interface-check");
+  assert_true(mark instanceof PerformanceEntry,
+    "PerformanceMark should be an instance of PerformanceEntry");
+  assert_true(mark instanceof PerformanceMark,
+    "mark should be an instance of PerformanceMark");
+  assert_equals(typeof mark.toJSON, "function",
+    "PerformanceEntry should have a toJSON method");
+  var json = mark.toJSON();
+  assert_equals(json.name, "interface-check",
+    "toJSON().name should match");
+  assert_equals(json.entryType, "mark",
+    "toJSON().entryType should match");
+  performance.clearMarks();
+}, "Performance Timeline: PerformanceEntry interface and toJSON");
+
+test(function () {
+  performance.clearMarks();
+  performance.clearMeasures();
+  performance.mark("msr-start");
+  performance.mark("msr-end");
+  var measure = performance.measure("interface-measure", "msr-start", "msr-end");
+  assert_true(measure instanceof PerformanceEntry,
+    "PerformanceMeasure should be an instance of PerformanceEntry");
+  assert_true(measure instanceof PerformanceMeasure,
+    "measure should be an instance of PerformanceMeasure");
+  performance.clearMarks();
+  performance.clearMeasures();
+}, "Performance Timeline: PerformanceMeasure inherits from PerformanceEntry");
+
+// =============================================================
+// 8. Integration: mark, measure, getEntries, and observer together
+// Covers cross-feature interaction between User Timing, Performance
+//        Timeline, and PerformanceObserver
+// =============================================================
+
+promise_test(function () {
+  performance.clearMarks();
+  performance.clearMeasures();
+
+  return new Promise(function (resolve) {
+    var observer = new PerformanceObserver(function (list) {
+      var entries = list.getEntries();
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].name === "integration-measure") {
+          observer.disconnect();
+          resolve(entries[i]);
+          return;
+        }
+      }
+    });
+    observer.observe({ type: "measure" });
+
+    performance.mark("int-start");
+    performance.mark("int-end");
+    performance.measure("integration-measure", "int-start", "int-end");
+  }).then(function (entry) {
+    assert_equals(entry.name, "integration-measure",
+      "observed measure name should match");
+    assert_equals(entry.entryType, "measure",
+      "observed entry type should be 'measure'");
+    assert_greater_than_equal(entry.duration, 0,
+      "observed measure duration should be non-negative");
+
+    // Verify the measure also appears in the timeline
+    var timeline = performance.getEntriesByName("integration-measure", "measure");
+    assert_true(timeline.length >= 1,
+      "integration-measure should be in timeline");
+
+    performance.clearMarks();
+    performance.clearMeasures();
+  });
+}, "Integration: mark + measure + PerformanceObserver + getEntriesByName");
+</script>
