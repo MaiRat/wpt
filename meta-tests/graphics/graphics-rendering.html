@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Graphics Integration — Consolidated SVG and Canvas Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://svgwg.org/svg2-draft/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/canvas.html">
+<link rel="help" href="https://www.w3.org/TR/png/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: graphics/graphics-rendering.html
+  Exercises SVG rendering, Canvas 2D drawing, and image decoding together.
+
+  Covers atomic test areas:
+    - svg/types/ (SVG DOM types)
+    - svg/geometry/ (SVG geometry attributes)
+    - svg/styling/ (SVG presentation attributes)
+    - svg/coordinate-systems/ (viewBox, transforms)
+    - svg/text/ (SVG text rendering)
+    - html/canvas/element/ (canvas element behavior)
+    - html/canvas/2dcontext/ (CanvasRenderingContext2D drawing)
+    - png/ (PNG image decoding)
+    - apng/ (APNG support)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. SVG Element Creation
+// Covers: svg/types/
+// =============================================================
+
+var SVG_NS = "http://www.w3.org/2000/svg";
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  assert_equals(svg.namespaceURI, SVG_NS,
+    "SVG element should have SVG namespace");
+  assert_true(svg instanceof SVGElement,
+    "SVG element should be an SVGElement instance");
+  cleanup();
+}, "SVG: createElement creates SVG namespace element");
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "100");
+  container.appendChild(svg);
+
+  assert_equals(svg.getAttribute("width"), "200",
+    "SVG width attribute should be '200'");
+  assert_equals(svg.getAttribute("height"), "100",
+    "SVG height attribute should be '100'");
+  cleanup();
+}, "SVG: width/height attributes are set correctly");
+
+// =============================================================
+// 2. SVG Geometry — Basic Shapes
+// Covers: svg/geometry/
+// =============================================================
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var rect = document.createElementNS(SVG_NS, "rect");
+  rect.setAttribute("x", "10");
+  rect.setAttribute("y", "20");
+  rect.setAttribute("width", "80");
+  rect.setAttribute("height", "60");
+  rect.setAttribute("fill", "blue");
+  svg.appendChild(rect);
+
+  assert_true(rect instanceof SVGRectElement,
+    "rect should be SVGRectElement");
+  assert_equals(rect.x.baseVal.value, 10, "rect x should be 10");
+  assert_equals(rect.y.baseVal.value, 20, "rect y should be 20");
+  assert_equals(rect.width.baseVal.value, 80, "rect width should be 80");
+  assert_equals(rect.height.baseVal.value, 60, "rect height should be 60");
+  cleanup();
+}, "SVG Geometry: rect element with position and size");
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var circle = document.createElementNS(SVG_NS, "circle");
+  circle.setAttribute("cx", "100");
+  circle.setAttribute("cy", "100");
+  circle.setAttribute("r", "50");
+  svg.appendChild(circle);
+
+  assert_true(circle instanceof SVGCircleElement,
+    "circle should be SVGCircleElement");
+  assert_equals(circle.cx.baseVal.value, 100, "cx should be 100");
+  assert_equals(circle.cy.baseVal.value, 100, "cy should be 100");
+  assert_equals(circle.r.baseVal.value, 50, "r should be 50");
+  cleanup();
+}, "SVG Geometry: circle element with center and radius");
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var line = document.createElementNS(SVG_NS, "line");
+  line.setAttribute("x1", "0");
+  line.setAttribute("y1", "0");
+  line.setAttribute("x2", "100");
+  line.setAttribute("y2", "100");
+  line.setAttribute("stroke", "black");
+  svg.appendChild(line);
+
+  assert_true(line instanceof SVGLineElement,
+    "line should be SVGLineElement");
+  assert_equals(line.x1.baseVal.value, 0, "x1 should be 0");
+  assert_equals(line.y2.baseVal.value, 100, "y2 should be 100");
+  cleanup();
+}, "SVG Geometry: line element with start and end points");
+
+// =============================================================
+// 3. SVG Styling
+// Covers: svg/styling/
+// =============================================================
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var rect = document.createElementNS(SVG_NS, "rect");
+  rect.setAttribute("width", "100");
+  rect.setAttribute("height", "100");
+  rect.setAttribute("fill", "red");
+  rect.setAttribute("stroke", "blue");
+  rect.setAttribute("stroke-width", "3");
+  rect.setAttribute("opacity", "0.5");
+  svg.appendChild(rect);
+
+  var style = getComputedStyle(rect);
+  assert_equals(style.fill, "rgb(255, 0, 0)", "fill should be red");
+  assert_equals(style.stroke, "rgb(0, 0, 255)", "stroke should be blue");
+  assert_equals(style.opacity, "0.5", "opacity should be 0.5");
+  cleanup();
+}, "SVG Styling: fill, stroke, opacity as presentation attributes");
+
+// =============================================================
+// 4. SVG Coordinate Systems
+// Covers: svg/coordinate-systems/
+// =============================================================
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  container.appendChild(svg);
+
+  assert_equals(svg.viewBox.baseVal.x, 0, "viewBox x should be 0");
+  assert_equals(svg.viewBox.baseVal.y, 0, "viewBox y should be 0");
+  assert_equals(svg.viewBox.baseVal.width, 100, "viewBox width should be 100");
+  assert_equals(svg.viewBox.baseVal.height, 100, "viewBox height should be 100");
+  cleanup();
+}, "SVG Coordinates: viewBox attribute is parsed correctly");
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "200");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("transform", "translate(10, 20)");
+  svg.appendChild(g);
+
+  var rect = document.createElementNS(SVG_NS, "rect");
+  rect.setAttribute("width", "50");
+  rect.setAttribute("height", "50");
+  g.appendChild(rect);
+
+  var ctm = rect.getCTM();
+  assert_approx_equals(ctm.e, 10, 0.01,
+    "CTM translateX should be 10");
+  assert_approx_equals(ctm.f, 20, 0.01,
+    "CTM translateY should be 20");
+  cleanup();
+}, "SVG Coordinates: group transform affects child CTM");
+
+// =============================================================
+// 5. SVG Text
+// Covers: svg/text/
+// =============================================================
+
+test(function () {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "400");
+  svg.setAttribute("height", "200");
+  container.appendChild(svg);
+
+  var text = document.createElementNS(SVG_NS, "text");
+  text.setAttribute("x", "10");
+  text.setAttribute("y", "50");
+  text.textContent = "Hello SVG";
+  svg.appendChild(text);
+
+  assert_true(text instanceof SVGTextElement,
+    "text should be SVGTextElement");
+  assert_equals(text.textContent, "Hello SVG",
+    "Text content should match");
+  assert_true(text.getComputedTextLength() > 0,
+    "Computed text length should be positive");
+  cleanup();
+}, "SVG Text: text element renders with measurable length");
+
+// =============================================================
+// 6. Canvas Element
+// Covers: html/canvas/element/
+// =============================================================
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 100;
+  container.appendChild(canvas);
+
+  assert_equals(canvas.width, 200, "canvas width should be 200");
+  assert_equals(canvas.height, 100, "canvas height should be 100");
+  assert_true(canvas instanceof HTMLCanvasElement,
+    "Should be an HTMLCanvasElement");
+  cleanup();
+}, "Canvas: element creation and dimension attributes");
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+
+  var ctx = canvas.getContext("2d");
+  assert_not_equals(ctx, null, "2d context should not be null");
+  assert_true(ctx instanceof CanvasRenderingContext2D,
+    "Context should be CanvasRenderingContext2D");
+  cleanup();
+}, "Canvas: getContext('2d') returns CanvasRenderingContext2D");
+
+// =============================================================
+// 7. Canvas 2D Drawing
+// Covers: html/canvas/2dcontext/
+// =============================================================
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#ff0000";
+  ctx.fillRect(0, 0, 100, 100);
+
+  var data = ctx.getImageData(50, 50, 1, 1).data;
+  assert_equals(data[0], 255, "Red channel should be 255");
+  assert_equals(data[1], 0, "Green channel should be 0");
+  assert_equals(data[2], 0, "Blue channel should be 0");
+  assert_equals(data[3], 255, "Alpha channel should be 255");
+  cleanup();
+}, "Canvas 2D: fillRect with solid color produces correct pixels");
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "blue";
+  ctx.fillRect(0, 0, 100, 100);
+
+  ctx.clearRect(10, 10, 50, 50);
+
+  var cleared = ctx.getImageData(30, 30, 1, 1).data;
+  assert_equals(cleared[3], 0, "Cleared area alpha should be 0");
+
+  var filled = ctx.getImageData(5, 5, 1, 1).data;
+  assert_equals(filled[2], 255, "Non-cleared area should still be blue");
+  cleanup();
+}, "Canvas 2D: clearRect clears pixels to transparent");
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  var ctx = canvas.getContext("2d");
+
+  ctx.strokeStyle = "#00ff00";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, 50);
+  ctx.lineTo(100, 50);
+  ctx.stroke();
+
+  var data = ctx.getImageData(50, 50, 1, 1).data;
+  assert_equals(data[1], 255, "Stroke center should have green=255");
+  cleanup();
+}, "Canvas 2D: stroke renders line with correct color");
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  var ctx = canvas.getContext("2d");
+
+  ctx.beginPath();
+  ctx.arc(50, 50, 40, 0, 2 * Math.PI);
+  ctx.fillStyle = "green";
+  ctx.fill();
+
+  var center = ctx.getImageData(50, 50, 1, 1).data;
+  // CSS 'green' is rgb(0, 128, 0) — half-intensity green
+  assert_equals(center[1], 128, "Center of arc should be CSS green (128)");
+
+  var corner = ctx.getImageData(0, 0, 1, 1).data;
+  assert_equals(corner[3], 0, "Corner outside arc should be transparent");
+  cleanup();
+}, "Canvas 2D: arc draws a filled circle");
+
+// =============================================================
+// 8. Canvas State Management
+// Covers: html/canvas/2dcontext/
+// =============================================================
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 100;
+  canvas.height = 100;
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "red";
+  ctx.save();
+  ctx.fillStyle = "blue";
+  assert_equals(ctx.fillStyle, "#0000ff", "fillStyle should be blue after set");
+  ctx.restore();
+  assert_equals(ctx.fillStyle, "#ff0000",
+    "fillStyle should be red after restore");
+  cleanup();
+}, "Canvas 2D: save/restore preserves and reverts state");
+
+// =============================================================
+// 9. Canvas Transforms
+// Covers: html/canvas/2dcontext/
+// =============================================================
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 200;
+  var ctx = canvas.getContext("2d");
+
+  ctx.translate(100, 100);
+  ctx.fillStyle = "red";
+  ctx.fillRect(0, 0, 10, 10);
+
+  var data = ctx.getImageData(105, 105, 1, 1).data;
+  assert_equals(data[0], 255, "Translated fill should appear at (105,105)");
+
+  var origin = ctx.getImageData(0, 0, 1, 1).data;
+  assert_equals(origin[3], 0, "Origin should be empty after translation");
+  cleanup();
+}, "Canvas 2D: translate shifts drawing origin");
+
+// =============================================================
+// 10. Canvas toDataURL
+// Covers: html/canvas/element/
+// =============================================================
+
+test(function () {
+  var canvas = document.createElement("canvas");
+  canvas.width = 10;
+  canvas.height = 10;
+  var ctx = canvas.getContext("2d");
+  ctx.fillStyle = "red";
+  ctx.fillRect(0, 0, 10, 10);
+
+  var dataURL = canvas.toDataURL("image/png");
+  assert_true(dataURL.indexOf("data:image/png") === 0,
+    "toDataURL should produce a PNG data URL");
+  cleanup();
+}, "Canvas: toDataURL produces PNG data URL");
+
+// =============================================================
+// 11. Image decoding
+// Covers: png/, apng/
+// =============================================================
+
+async_test(function (t) {
+  var img = new Image();
+  img.onload = t.step_func_done(function () {
+    assert_equals(img.naturalWidth, 1,
+      "1x1 PNG should have naturalWidth 1");
+    assert_equals(img.naturalHeight, 1,
+      "1x1 PNG should have naturalHeight 1");
+  });
+  img.onerror = t.unreached_func("Image should load successfully");
+  // 1x1 red PNG
+  img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+}, "Image: decode 1x1 PNG via data URL");
+
+async_test(function (t) {
+  var img = new Image();
+  img.onload = t.step_func_done(function () {
+    // Draw to canvas and verify pixel
+    var canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    var data = ctx.getImageData(0, 0, 1, 1).data;
+    assert_equals(data[0], 255, "Red channel should be 255");
+    assert_equals(data[1], 0, "Green channel should be 0");
+    assert_equals(data[2], 0, "Blue channel should be 0");
+  });
+  img.onerror = t.unreached_func("Image should load successfully");
+  // 1x1 red PNG
+  img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+}, "Image: PNG drawn to canvas preserves pixel color");
+
+// =============================================================
+// 12. Integration: SVG rendered to Canvas
+// Cross-feature test
+// =============================================================
+
+async_test(function (t) {
+  var svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+    '<rect width="10" height="10" fill="green"/></svg>';
+  var blob = new Blob([svgMarkup], { type: "image/svg+xml" });
+  var url = URL.createObjectURL(blob);
+
+  var img = new Image();
+  img.onload = t.step_func_done(function () {
+    var canvas = document.createElement("canvas");
+    canvas.width = 10;
+    canvas.height = 10;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+
+    var data = ctx.getImageData(5, 5, 1, 1).data;
+    // CSS 'green' keyword is rgb(0, 128, 0) — half-intensity green
+    assert_equals(data[1], 128, "Green channel should be 128 (CSS green)");
+    assert_equals(data[0], 0, "Red channel should be 0");
+
+    URL.revokeObjectURL(url);
+  });
+  img.onerror = t.unreached_func("SVG image should load");
+  img.src = url;
+}, "Integration: SVG blob rendered to Canvas via drawImage");
+</script>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Media Integration — Consolidated Audio and Video Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/media.html">
+<link rel="help" href="https://www.w3.org/TR/media-source/">
+<link rel="help" href="https://www.w3.org/TR/webvtt1/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: media/media-playback.html
+  Exercises HTML5 audio and video elements, media events, and related APIs.
+
+  Covers atomic test areas:
+    - html/semantics/embedded-content/media-elements/ (video/audio elements)
+    - html/semantics/embedded-content/media-elements/playing-the-media-resource/
+    - html/semantics/embedded-content/media-elements/loading-the-media-resource/
+    - html/semantics/embedded-content/media-elements/event-summary/
+    - media-source/ (MediaSource API basics)
+    - webvtt/ (track/cue basics)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. Video Element — Creation and Properties
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  assert_true(video instanceof HTMLVideoElement,
+    "Should be an HTMLVideoElement");
+  assert_equals(video.readyState, HTMLMediaElement.HAVE_NOTHING,
+    "Initial readyState should be HAVE_NOTHING");
+  assert_true(video.paused, "Initial paused state should be true");
+  assert_false(video.ended, "Initial ended state should be false");
+  assert_equals(video.currentTime, 0, "Initial currentTime should be 0");
+  cleanup();
+}, "Video: element creation and initial property values");
+
+test(function () {
+  var video = document.createElement("video");
+  video.width = 320;
+  video.height = 240;
+  video.preload = "none";
+  video.loop = true;
+  video.muted = true;
+
+  assert_equals(video.width, 320, "width should be 320");
+  assert_equals(video.height, 240, "height should be 240");
+  assert_equals(video.preload, "none", "preload should be 'none'");
+  assert_true(video.loop, "loop should be true");
+  assert_true(video.muted, "muted should be true");
+  cleanup();
+}, "Video: setting element attributes");
+
+test(function () {
+  var video = document.createElement("video");
+  video.controls = true;
+  container.appendChild(video);
+
+  assert_true(video.controls, "controls should be true");
+  assert_true(video.hasAttribute("controls"),
+    "controls attribute should be present in DOM");
+  cleanup();
+}, "Video: controls attribute reflects as boolean");
+
+// =============================================================
+// 2. Audio Element — Creation and Properties
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var audio = document.createElement("audio");
+  assert_true(audio instanceof HTMLAudioElement,
+    "Should be an HTMLAudioElement");
+  assert_equals(audio.readyState, HTMLMediaElement.HAVE_NOTHING,
+    "Initial readyState should be HAVE_NOTHING");
+  assert_true(audio.paused, "Initial paused state should be true");
+  cleanup();
+}, "Audio: element creation and initial property values");
+
+test(function () {
+  var audio = new Audio();
+  assert_true(audio instanceof HTMLAudioElement,
+    "Audio() constructor should return HTMLAudioElement");
+  assert_true(audio.paused, "Should be initially paused");
+  cleanup();
+}, "Audio: Audio() constructor creates element");
+
+// =============================================================
+// 3. Media Element Constants
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  assert_equals(HTMLMediaElement.HAVE_NOTHING, 0, "HAVE_NOTHING should be 0");
+  assert_equals(HTMLMediaElement.HAVE_METADATA, 1, "HAVE_METADATA should be 1");
+  assert_equals(HTMLMediaElement.HAVE_CURRENT_DATA, 2,
+    "HAVE_CURRENT_DATA should be 2");
+  assert_equals(HTMLMediaElement.HAVE_FUTURE_DATA, 3,
+    "HAVE_FUTURE_DATA should be 3");
+  assert_equals(HTMLMediaElement.HAVE_ENOUGH_DATA, 4,
+    "HAVE_ENOUGH_DATA should be 4");
+}, "Media: readyState constants are defined correctly");
+
+test(function () {
+  assert_equals(HTMLMediaElement.NETWORK_EMPTY, 0,
+    "NETWORK_EMPTY should be 0");
+  assert_equals(HTMLMediaElement.NETWORK_IDLE, 1,
+    "NETWORK_IDLE should be 1");
+  assert_equals(HTMLMediaElement.NETWORK_LOADING, 2,
+    "NETWORK_LOADING should be 2");
+  assert_equals(HTMLMediaElement.NETWORK_NO_SOURCE, 3,
+    "NETWORK_NO_SOURCE should be 3");
+}, "Media: networkState constants are defined correctly");
+
+// =============================================================
+// 4. Source Element
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  var source = document.createElement("source");
+  source.type = "video/mp4";
+  source.src = "/media/test.mp4";
+  video.appendChild(source);
+
+  assert_equals(video.querySelector("source").type, "video/mp4",
+    "Source type should be video/mp4");
+  assert_true(video.querySelector("source").src.indexOf("/media/test.mp4") !== -1,
+    "Source src should contain the path");
+  cleanup();
+}, "Source: element sets type and src correctly");
+
+// =============================================================
+// 5. Volume and Playback Rate
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+
+  video.volume = 0.5;
+  assert_equals(video.volume, 0.5, "volume should be 0.5");
+
+  video.volume = 0;
+  assert_equals(video.volume, 0, "volume should be 0");
+
+  video.volume = 1;
+  assert_equals(video.volume, 1, "volume should be 1");
+
+  assert_throws_dom("IndexSizeError", function () {
+    video.volume = -0.1;
+  }, "Setting volume below 0 should throw IndexSizeError");
+
+  assert_throws_dom("IndexSizeError", function () {
+    video.volume = 1.1;
+  }, "Setting volume above 1 should throw IndexSizeError");
+  cleanup();
+}, "Media: volume property accepts 0-1 range and rejects out-of-range");
+
+test(function () {
+  var video = document.createElement("video");
+
+  video.defaultPlaybackRate = 2.0;
+  assert_equals(video.defaultPlaybackRate, 2.0,
+    "defaultPlaybackRate should be 2.0");
+
+  video.playbackRate = 0.5;
+  assert_equals(video.playbackRate, 0.5,
+    "playbackRate should be 0.5");
+  cleanup();
+}, "Media: playbackRate and defaultPlaybackRate are settable");
+
+// =============================================================
+// 6. Media Error Handling
+// Covers: html/semantics/embedded-content/media-elements/error-codes/
+// =============================================================
+
+test(function () {
+  assert_equals(MediaError.MEDIA_ERR_ABORTED, 1,
+    "MEDIA_ERR_ABORTED should be 1");
+  assert_equals(MediaError.MEDIA_ERR_NETWORK, 2,
+    "MEDIA_ERR_NETWORK should be 2");
+  assert_equals(MediaError.MEDIA_ERR_DECODE, 3,
+    "MEDIA_ERR_DECODE should be 3");
+  assert_equals(MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED, 4,
+    "MEDIA_ERR_SRC_NOT_SUPPORTED should be 4");
+}, "Media: MediaError constants are defined correctly");
+
+test(function () {
+  var video = document.createElement("video");
+  assert_equals(video.error, null,
+    "error should be null when no source is loaded");
+  cleanup();
+}, "Media: error is null initially");
+
+// =============================================================
+// 7. TimeRanges Interface
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  var buffered = video.buffered;
+  assert_equals(buffered.length, 0,
+    "buffered.length should be 0 with no source");
+  assert_throws_dom("IndexSizeError", function () {
+    buffered.start(0);
+  }, "Accessing start(0) on empty TimeRanges should throw");
+  assert_throws_dom("IndexSizeError", function () {
+    buffered.end(0);
+  }, "Accessing end(0) on empty TimeRanges should throw");
+  cleanup();
+}, "Media: TimeRanges is empty and throws for invalid index");
+
+// =============================================================
+// 8. TextTrack / Track Element
+// Covers: webvtt/, html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  var track = document.createElement("track");
+  track.kind = "subtitles";
+  track.label = "English";
+  track.srclang = "en";
+  video.appendChild(track);
+
+  assert_equals(video.textTracks.length, 1,
+    "textTracks should have 1 track");
+  assert_equals(video.textTracks[0].kind, "subtitles",
+    "Track kind should be 'subtitles'");
+  assert_equals(video.textTracks[0].label, "English",
+    "Track label should be 'English'");
+  assert_equals(video.textTracks[0].language, "en",
+    "Track language should be 'en'");
+  cleanup();
+}, "TextTrack: track element creates accessible TextTrack");
+
+test(function () {
+  var video = document.createElement("video");
+  var track1 = document.createElement("track");
+  track1.kind = "subtitles";
+  track1.label = "English";
+  var track2 = document.createElement("track");
+  track2.kind = "captions";
+  track2.label = "CC";
+  video.appendChild(track1);
+  video.appendChild(track2);
+
+  assert_equals(video.textTracks.length, 2,
+    "textTracks should have 2 tracks");
+  assert_equals(video.textTracks[0].kind, "subtitles",
+    "First track kind should be 'subtitles'");
+  assert_equals(video.textTracks[1].kind, "captions",
+    "Second track kind should be 'captions'");
+  cleanup();
+}, "TextTrack: multiple tracks are listed in order");
+
+// =============================================================
+// 9. canPlayType
+// Covers: html/semantics/embedded-content/media-elements/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  var result = video.canPlayType("video/definitely-not-a-type");
+  assert_equals(result, "",
+    "canPlayType should return '' for unknown types");
+  cleanup();
+}, "Media: canPlayType returns empty string for unknown MIME type");
+
+test(function () {
+  var audio = document.createElement("audio");
+  var result = audio.canPlayType("audio/this-does-not-exist");
+  assert_equals(result, "",
+    "canPlayType should return '' for unknown audio types");
+  cleanup();
+}, "Media: audio canPlayType returns empty string for unknown type");
+
+// =============================================================
+// 10. Play/Pause Without Source
+// Covers: html/semantics/embedded-content/media-elements/playing-the-media-resource/
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  assert_true(video.paused, "Should be paused initially");
+  video.pause();
+  assert_true(video.paused, "Should still be paused after pause()");
+  cleanup();
+}, "Media: pause() on element without source stays paused");
+
+// =============================================================
+// 11. MediaSource API — Basic Availability
+// Covers: media-source/
+// =============================================================
+
+test(function () {
+  assert_true("MediaSource" in window || "WebKitMediaSource" in window,
+    "MediaSource or WebKitMediaSource should be defined");
+  if ("MediaSource" in window) {
+    var ms = new MediaSource();
+    assert_equals(ms.readyState, "closed",
+      "New MediaSource readyState should be 'closed'");
+    assert_equals(ms.sourceBuffers.length, 0,
+      "sourceBuffers should be empty");
+    assert_equals(ms.activeSourceBuffers.length, 0,
+      "activeSourceBuffers should be empty");
+  }
+  cleanup();
+}, "MediaSource: constructor and initial state");
+
+test(function () {
+  if (!("MediaSource" in window)) {
+    return;
+  }
+  var ms = new MediaSource();
+  var url = URL.createObjectURL(ms);
+  assert_true(url.indexOf("blob:") === 0,
+    "Object URL should start with 'blob:'");
+  URL.revokeObjectURL(url);
+  cleanup();
+}, "MediaSource: createObjectURL produces blob URL");
+
+// =============================================================
+// 12. Integration: Video element with multiple tracks and properties
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  var video = document.createElement("video");
+  video.width = 640;
+  video.height = 480;
+  video.muted = true;
+  video.preload = "metadata";
+
+  var source1 = document.createElement("source");
+  source1.type = "video/mp4";
+  source1.src = "/media/test.mp4";
+
+  var source2 = document.createElement("source");
+  source2.type = "video/webm";
+  source2.src = "/media/test.webm";
+
+  var track = document.createElement("track");
+  track.kind = "subtitles";
+  track.srclang = "en";
+  track.label = "English";
+
+  video.appendChild(source1);
+  video.appendChild(source2);
+  video.appendChild(track);
+  container.appendChild(video);
+
+  assert_equals(video.querySelectorAll("source").length, 2,
+    "Video should contain 2 source elements");
+  assert_equals(video.textTracks.length, 1,
+    "Video should have 1 text track");
+  assert_true(video.muted, "Video should be muted");
+  assert_equals(video.preload, "metadata",
+    "Video preload should be 'metadata'");
+  assert_equals(video.width, 640, "Video width should be 640");
+  assert_equals(video.height, 480, "Video height should be 480");
+  cleanup();
+}, "Integration: video element with sources, tracks, and attributes");
+</script>
