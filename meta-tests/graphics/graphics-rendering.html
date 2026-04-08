@@ -329,7 +329,8 @@ test(function () {
   ctx.fill();
 
   var center = ctx.getImageData(50, 50, 1, 1).data;
-  assert_equals(center[1], 128, "Center of arc should be green");
+  // CSS 'green' is rgb(0, 128, 0) — half-intensity green
+  assert_equals(center[1], 128, "Center of arc should be CSS green (128)");
 
   var corner = ctx.getImageData(0, 0, 1, 1).data;
   assert_equals(corner[3], 0, "Corner outside arc should be transparent");
@@ -456,7 +457,8 @@ async_test(function (t) {
     ctx.drawImage(img, 0, 0);
 
     var data = ctx.getImageData(5, 5, 1, 1).data;
-    assert_equals(data[1], 128, "Green channel should be 128 (green)");
+    // CSS 'green' keyword is rgb(0, 128, 0) — half-intensity green
+    assert_equals(data[1], 128, "Green channel should be 128 (CSS green)");
     assert_equals(data[0], 0, "Red channel should be 0");
 
     URL.revokeObjectURL(url);

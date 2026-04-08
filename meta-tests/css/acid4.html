@@ -464,7 +464,7 @@ test(function () {
     boxSizing: "content-box"
   });
   assert_approx_equals(el.offsetWidth, 130, 1,
-    "content-box width = content + padding + border = 100+20+10");
+    "content-box offsetWidth = content + padding*2 + border*2 = 100 + (10*2) + (5*2)");
   el.remove();
 }, "Box model: content-box offsetWidth includes padding and border");
 
