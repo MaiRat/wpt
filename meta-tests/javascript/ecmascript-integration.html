@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>ECMAScript Integration — Consolidated JavaScript Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://tc39.es/ecma262/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/structured-data.html">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: javascript/ecmascript-integration.html
+  Exercises high-level ECMAScript features together in a single integrated page.
+
+  Covers atomic test areas:
+    - js/builtins/ (Promise, Map, Set, WeakMap, WeakSet, Symbol, Proxy, Reflect)
+    - js/builtins/Array/ (array methods — from, of, find, includes, flat)
+    - js/builtins/Object/ (Object.assign, entries, fromEntries, keys, values)
+    - js/builtins/String/ (template literals, startsWith, endsWith, includes, repeat)
+    - js/builtins/Number/ (Number.isFinite, isInteger, isNaN, parseFloat)
+    - js/builtins/Iterator/ (for-of, spread, destructuring, generators)
+    - js/builtins/Promise/ (then, catch, finally, all, race, allSettled, any)
+    - js/builtins/TypedArray/ (ArrayBuffer, DataView, Uint8Array)
+    - html/webappapis/structured-clone/ (structuredClone)
+-->
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// =============================================================
+// 1. Promises — Core
+// Covers: js/builtins/Promise/
+// =============================================================
+
+promise_test(function () {
+  return new Promise(function (resolve) {
+    resolve("resolved");
+  }).then(function (value) {
+    assert_equals(value, "resolved",
+      "Promise should resolve with correct value");
+  });
+}, "Promise: basic resolve and then");
+
+promise_test(function () {
+  return new Promise(function (_, reject) {
+    reject(new Error("fail"));
+  }).catch(function (err) {
+    assert_equals(err.message, "fail",
+      "Promise should reject with correct error");
+  });
+}, "Promise: reject and catch");
+
+promise_test(function () {
+  var finallyRan = false;
+  return Promise.resolve("done")
+    .finally(function () {
+      finallyRan = true;
+    })
+    .then(function (value) {
+      assert_equals(value, "done",
+        "finally should not alter resolved value");
+      assert_true(finallyRan,
+        "finally callback should have run");
+    });
+}, "Promise: finally runs without altering resolved value");
+
+// =============================================================
+// 2. Promise Combinators
+// Covers: js/builtins/Promise/
+// =============================================================
+
+promise_test(function () {
+  return Promise.all([
+    Promise.resolve(1),
+    Promise.resolve(2),
+    Promise.resolve(3)
+  ]).then(function (values) {
+    assert_array_equals(values, [1, 2, 3],
+      "Promise.all should resolve with array of values");
+  });
+}, "Promise: Promise.all resolves with array");
+
+promise_test(function () {
+  return Promise.all([
+    Promise.resolve(1),
+    Promise.reject(new Error("fail")),
+    Promise.resolve(3)
+  ]).catch(function (err) {
+    assert_equals(err.message, "fail",
+      "Promise.all should reject if any promise rejects");
+  });
+}, "Promise: Promise.all rejects on first rejection");
+
+promise_test(function () {
+  return Promise.race([
+    new Promise(function () { /* never settles */ }),
+    Promise.resolve("fast")
+  ]).then(function (value) {
+    assert_equals(value, "fast",
+      "Promise.race should resolve with first settled value");
+  });
+}, "Promise: Promise.race resolves with first settled");
+
+promise_test(function () {
+  return Promise.allSettled([
+    Promise.resolve("ok"),
+    Promise.reject(new Error("err"))
+  ]).then(function (results) {
+    assert_equals(results.length, 2,
+      "allSettled should return all results");
+    assert_equals(results[0].status, "fulfilled",
+      "First result should be fulfilled");
+    assert_equals(results[0].value, "ok",
+      "First result value should be 'ok'");
+    assert_equals(results[1].status, "rejected",
+      "Second result should be rejected");
+    assert_equals(results[1].reason.message, "err",
+      "Second result reason should be the error");
+  });
+}, "Promise: Promise.allSettled returns all outcomes");
+
+promise_test(function () {
+  return Promise.any([
+    Promise.reject(new Error("a")),
+    Promise.resolve("b"),
+    Promise.resolve("c")
+  ]).then(function (value) {
+    assert_equals(value, "b",
+      "Promise.any should resolve with first fulfilled value");
+  });
+}, "Promise: Promise.any resolves with first fulfilled");
+
+// =============================================================
+// 3. Map and Set
+// Covers: js/builtins/Map/, js/builtins/Set/
+// =============================================================
+
+test(function () {
+  var map = new Map();
+  map.set("key1", "value1");
+  map.set("key2", "value2");
+
+  assert_equals(map.size, 2, "Map size should be 2");
+  assert_equals(map.get("key1"), "value1",
+    "get should return stored value");
+  assert_true(map.has("key2"), "has should return true for existing key");
+
+  map.delete("key1");
+  assert_false(map.has("key1"),
+    "has should return false after delete");
+  assert_equals(map.size, 1, "Map size should be 1 after delete");
+
+  map.clear();
+  assert_equals(map.size, 0, "Map size should be 0 after clear");
+}, "Map: set, get, has, delete, clear, size");
+
+test(function () {
+  var map = new Map([["a", 1], ["b", 2], ["c", 3]]);
+  var keys = [];
+  map.forEach(function (value, key) {
+    keys.push(key);
+  });
+  assert_array_equals(keys, ["a", "b", "c"],
+    "forEach should iterate in insertion order");
+}, "Map: constructor with iterable and forEach iteration");
+
+test(function () {
+  var set = new Set();
+  set.add(1);
+  set.add(2);
+  set.add(2);
+  set.add(3);
+
+  assert_equals(set.size, 3, "Set size should be 3 (no duplicates)");
+  assert_true(set.has(2), "has should return true for existing value");
+
+  set.delete(2);
+  assert_false(set.has(2), "has should return false after delete");
+  assert_equals(set.size, 2, "Set size should be 2 after delete");
+}, "Set: add, has, delete, size — deduplication");
+
+test(function () {
+  var set = new Set([10, 20, 30]);
+  var values = Array.from(set);
+  assert_array_equals(values, [10, 20, 30],
+    "Set from iterable should preserve insertion order");
+}, "Set: constructor with iterable preserves order");
+
+// =============================================================
+// 4. WeakMap and WeakSet
+// Covers: js/builtins/WeakMap/, js/builtins/WeakSet/
+// =============================================================
+
+test(function () {
+  var wm = new WeakMap();
+  var obj = {};
+  wm.set(obj, "data");
+
+  assert_true(wm.has(obj), "WeakMap should contain the key");
+  assert_equals(wm.get(obj), "data",
+    "WeakMap should return stored value");
+
+  wm.delete(obj);
+  assert_false(wm.has(obj),
+    "WeakMap should not contain key after delete");
+}, "WeakMap: set, get, has, delete with object keys");
+
+test(function () {
+  var ws = new WeakSet();
+  var obj = {};
+  ws.add(obj);
+
+  assert_true(ws.has(obj), "WeakSet should contain the object");
+
+  ws.delete(obj);
+  assert_false(ws.has(obj),
+    "WeakSet should not contain object after delete");
+}, "WeakSet: add, has, delete with object values");
+
+// =============================================================
+// 5. Symbol
+// Covers: js/builtins/Symbol/
+// =============================================================
+
+test(function () {
+  var s1 = Symbol("test");
+  var s2 = Symbol("test");
+  assert_not_equals(s1, s2,
+    "Two symbols with same description should not be equal");
+  assert_equals(typeof s1, "symbol",
+    "typeof symbol should be 'symbol'");
+  assert_equals(s1.description, "test",
+    "Symbol description should match");
+}, "Symbol: unique identity and description");
+
+test(function () {
+  var s1 = Symbol.for("shared");
+  var s2 = Symbol.for("shared");
+  assert_equals(s1, s2,
+    "Symbol.for with same key should return same symbol");
+  assert_equals(Symbol.keyFor(s1), "shared",
+    "Symbol.keyFor should return the key");
+}, "Symbol: Symbol.for creates shared symbols");
+
+test(function () {
+  assert_equals(typeof Symbol.iterator, "symbol",
+    "Symbol.iterator should be a symbol");
+  assert_equals(typeof Symbol.toPrimitive, "symbol",
+    "Symbol.toPrimitive should be a symbol");
+  assert_equals(typeof Symbol.hasInstance, "symbol",
+    "Symbol.hasInstance should be a symbol");
+}, "Symbol: well-known symbols exist");
+
+// =============================================================
+// 6. Iterators and for-of
+// Covers: js/builtins/Iterator/
+// =============================================================
+
+test(function () {
+  var arr = [10, 20, 30];
+  var results = [];
+  for (var item of arr) {
+    results.push(item);
+  }
+  assert_array_equals(results, [10, 20, 30],
+    "for-of should iterate array values");
+}, "Iterator: for-of over array");
+
+test(function () {
+  var str = "abc";
+  var chars = [];
+  for (var ch of str) {
+    chars.push(ch);
+  }
+  assert_array_equals(chars, ["a", "b", "c"],
+    "for-of should iterate string characters");
+}, "Iterator: for-of over string");
+
+test(function () {
+  var map = new Map([["x", 1], ["y", 2]]);
+  var entries = [];
+  for (var entry of map) {
+    entries.push(entry);
+  }
+  assert_equals(entries.length, 2,
+    "for-of should iterate Map entries");
+  assert_array_equals(entries[0], ["x", 1],
+    "First Map entry should be ['x', 1]");
+}, "Iterator: for-of over Map");
+
+test(function () {
+  var obj = {};
+  obj[Symbol.iterator] = function () {
+    var i = 0;
+    return {
+      next: function () {
+        if (i < 3) return { value: i++, done: false };
+        return { value: undefined, done: true };
+      }
+    };
+  };
+  var result = Array.from(obj);
+  assert_array_equals(result, [0, 1, 2],
+    "Custom iterator should produce correct values");
+}, "Iterator: custom Symbol.iterator protocol");
+
+// =============================================================
+// 7. Generators
+// Covers: js/builtins/Iterator/ (generator functions)
+// =============================================================
+
+test(function () {
+  function* gen() {
+    yield 1;
+    yield 2;
+    yield 3;
+  }
+  var g = gen();
+  assert_equals(g.next().value, 1, "First yield should be 1");
+  assert_equals(g.next().value, 2, "Second yield should be 2");
+  assert_equals(g.next().value, 3, "Third yield should be 3");
+  assert_true(g.next().done, "Generator should be done after last yield");
+}, "Generator: yield values in sequence");
+
+test(function () {
+  function* gen() {
+    yield 1;
+    yield 2;
+    yield 3;
+  }
+  var result = Array.from(gen());
+  assert_array_equals(result, [1, 2, 3],
+    "Array.from should collect all yielded values");
+}, "Generator: iterable with Array.from");
+
+test(function () {
+  function* gen() {
+    yield 1;
+    yield 2;
+    yield 3;
+  }
+  var result = [...gen()];
+  assert_array_equals(result, [1, 2, 3],
+    "Spread should collect all yielded values");
+}, "Generator: spread operator collects yields");
+
+// =============================================================
+// 8. Destructuring
+// Covers: js/builtins/ (language-level features)
+// =============================================================
+
+test(function () {
+  var arr = [1, 2, 3];
+  var a = arr[0], b = arr[1], c = arr[2];
+  assert_equals(a, 1, "First destructured value should be 1");
+  assert_equals(b, 2, "Second destructured value should be 2");
+  assert_equals(c, 3, "Third destructured value should be 3");
+}, "Destructuring: array values");
+
+test(function () {
+  var obj = { x: 10, y: 20, z: 30 };
+  var x = obj.x, y = obj.y, z = obj.z;
+  assert_equals(x, 10, "x should be 10");
+  assert_equals(y, 20, "y should be 20");
+  assert_equals(z, 30, "z should be 30");
+}, "Destructuring: object properties");
+
+// =============================================================
+// 9. Proxy and Reflect
+// Covers: js/builtins/Proxy/, js/builtins/Reflect/
+// =============================================================
+
+test(function () {
+  var target = { a: 1, b: 2 };
+  var handler = {
+    get: function (obj, prop) {
+      return prop in obj ? obj[prop] : "default";
+    }
+  };
+  var proxy = new Proxy(target, handler);
+
+  assert_equals(proxy.a, 1, "Proxy should return target value for 'a'");
+  assert_equals(proxy.b, 2, "Proxy should return target value for 'b'");
+  assert_equals(proxy.c, "default",
+    "Proxy should return 'default' for missing property");
+}, "Proxy: get trap intercepts property access");
+
+test(function () {
+  var log = [];
+  var target = {};
+  var handler = {
+    set: function (obj, prop, value) {
+      log.push(prop + "=" + value);
+      obj[prop] = value;
+      return true;
+    }
+  };
+  var proxy = new Proxy(target, handler);
+  proxy.x = 10;
+  proxy.y = 20;
+
+  assert_array_equals(log, ["x=10", "y=20"],
+    "Set trap should log assignments");
+  assert_equals(target.x, 10, "Target should have x=10");
+  assert_equals(target.y, 20, "Target should have y=20");
+}, "Proxy: set trap intercepts property assignment");
+
+test(function () {
+  var obj = { a: 1 };
+  assert_true(Reflect.has(obj, "a"), "Reflect.has should return true");
+  assert_false(Reflect.has(obj, "b"), "Reflect.has should return false");
+
+  Reflect.set(obj, "c", 3);
+  assert_equals(obj.c, 3, "Reflect.set should set property");
+
+  assert_true(Reflect.deleteProperty(obj, "c"),
+    "Reflect.deleteProperty should return true");
+  assert_false("c" in obj,
+    "Property should be deleted after Reflect.deleteProperty");
+}, "Reflect: has, set, deleteProperty");
+
+test(function () {
+  var keys = Reflect.ownKeys({ a: 1, b: 2 });
+  assert_array_equals(keys, ["a", "b"],
+    "Reflect.ownKeys should return own property keys");
+}, "Reflect: ownKeys returns own property keys");
+
+// =============================================================
+// 10. Array Methods
+// Covers: js/builtins/Array/
+// =============================================================
+
+test(function () {
+  var arr = Array.from("abc");
+  assert_array_equals(arr, ["a", "b", "c"],
+    "Array.from should create array from iterable");
+
+  var mapped = Array.from([1, 2, 3], function (x) { return x * 2; });
+  assert_array_equals(mapped, [2, 4, 6],
+    "Array.from with mapFn should map values");
+}, "Array: Array.from creates from iterable with optional map");
+
+test(function () {
+  var arr = Array.of(1, 2, 3);
+  assert_array_equals(arr, [1, 2, 3],
+    "Array.of should create array from arguments");
+}, "Array: Array.of creates from arguments");
+
+test(function () {
+  var arr = [1, 2, 3, 4, 5];
+  var found = arr.find(function (x) { return x > 3; });
+  assert_equals(found, 4, "find should return first matching element");
+
+  var idx = arr.findIndex(function (x) { return x > 3; });
+  assert_equals(idx, 3, "findIndex should return index of first match");
+}, "Array: find and findIndex");
+
+test(function () {
+  assert_true([1, 2, 3].includes(2), "includes should find value");
+  assert_false([1, 2, 3].includes(4), "includes should not find missing value");
+}, "Array: includes checks for value presence");
+
+test(function () {
+  var nested = [1, [2, [3, [4]]]];
+  assert_array_equals(nested.flat(), [1, 2, [3, [4]]],
+    "flat() should flatten one level");
+  assert_array_equals(nested.flat(Infinity), [1, 2, 3, 4],
+    "flat(Infinity) should flatten all levels");
+}, "Array: flat with depth");
+
+test(function () {
+  var result = [1, 2, 3].flatMap(function (x) {
+    return [x, x * 2];
+  });
+  assert_array_equals(result, [1, 2, 2, 4, 3, 6],
+    "flatMap should map and flatten one level");
+}, "Array: flatMap maps and flattens");
+
+// =============================================================
+// 11. Object Methods
+// Covers: js/builtins/Object/
+// =============================================================
+
+test(function () {
+  var target = { a: 1 };
+  var source = { b: 2, c: 3 };
+  var result = Object.assign(target, source);
+
+  assert_equals(result, target, "assign should return target");
+  assert_equals(target.b, 2, "target should have property b");
+  assert_equals(target.c, 3, "target should have property c");
+}, "Object: Object.assign copies properties");
+
+test(function () {
+  var obj = { a: 1, b: 2, c: 3 };
+  assert_array_equals(Object.keys(obj), ["a", "b", "c"],
+    "keys should return property names");
+  assert_array_equals(Object.values(obj), [1, 2, 3],
+    "values should return property values");
+  var entries = Object.entries(obj);
+  assert_equals(entries.length, 3, "entries should have 3 pairs");
+  assert_array_equals(entries[0], ["a", 1],
+    "First entry should be ['a', 1]");
+}, "Object: keys, values, entries");
+
+test(function () {
+  var entries = [["a", 1], ["b", 2]];
+  var obj = Object.fromEntries(entries);
+  assert_equals(obj.a, 1, "fromEntries should create object from entries");
+  assert_equals(obj.b, 2, "fromEntries property b should be 2");
+}, "Object: Object.fromEntries from array of entries");
+
+test(function () {
+  var obj = Object.freeze({ x: 1, y: 2 });
+  assert_true(Object.isFrozen(obj), "Object should be frozen");
+  obj.x = 99;
+  assert_equals(obj.x, 1,
+    "Frozen object property should not change in strict mode");
+}, "Object: Object.freeze prevents modification");
+
+// =============================================================
+// 12. String Methods
+// Covers: js/builtins/String/
+// =============================================================
+
+test(function () {
+  var str = "Hello, World!";
+  assert_true(str.startsWith("Hello"),
+    "startsWith should match beginning");
+  assert_true(str.endsWith("World!"),
+    "endsWith should match ending");
+  assert_true(str.includes("World"),
+    "includes should find substring");
+  assert_false(str.includes("xyz"),
+    "includes should not find missing substring");
+}, "String: startsWith, endsWith, includes");
+
+test(function () {
+  assert_equals("ab".repeat(3), "ababab",
+    "repeat(3) should repeat string three times");
+  assert_equals("ab".repeat(0), "",
+    "repeat(0) should return empty string");
+}, "String: repeat");
+
+test(function () {
+  assert_equals("abc".padStart(6, "0"), "000abc",
+    "padStart should left-pad with fill string");
+  assert_equals("abc".padEnd(6, "0"), "abc000",
+    "padEnd should right-pad with fill string");
+}, "String: padStart and padEnd");
+
+test(function () {
+  assert_equals("  hello  ".trimStart(), "hello  ",
+    "trimStart should remove leading whitespace");
+  assert_equals("  hello  ".trimEnd(), "  hello",
+    "trimEnd should remove trailing whitespace");
+}, "String: trimStart and trimEnd");
+
+// =============================================================
+// 13. Number and Math Methods
+// Covers: js/builtins/Number/
+// =============================================================
+
+test(function () {
+  assert_true(Number.isFinite(42), "42 should be finite");
+  assert_false(Number.isFinite(Infinity), "Infinity should not be finite");
+  assert_false(Number.isFinite(NaN), "NaN should not be finite");
+
+  assert_true(Number.isInteger(10), "10 should be integer");
+  assert_false(Number.isInteger(10.5), "10.5 should not be integer");
+
+  assert_true(Number.isNaN(NaN), "NaN should be NaN");
+  assert_false(Number.isNaN(42), "42 should not be NaN");
+  assert_false(Number.isNaN("NaN"), "String 'NaN' should not be NaN");
+}, "Number: isFinite, isInteger, isNaN");
+
+test(function () {
+  assert_equals(Number.parseInt("42"), 42,
+    "parseInt should parse integer string");
+  assert_approx_equals(Number.parseFloat("3.14"), 3.14, 0.001,
+    "parseFloat should parse float string");
+  assert_true(Number.isSafeInteger(Number.MAX_SAFE_INTEGER),
+    "MAX_SAFE_INTEGER should be safe");
+  assert_false(Number.isSafeInteger(Number.MAX_SAFE_INTEGER + 1),
+    "MAX_SAFE_INTEGER + 1 should not be safe");
+}, "Number: parseInt, parseFloat, isSafeInteger");
+
+// =============================================================
+// 14. TypedArrays and ArrayBuffer
+// Covers: js/builtins/TypedArray/
+// =============================================================
+
+test(function () {
+  var buffer = new ArrayBuffer(16);
+  assert_equals(buffer.byteLength, 16,
+    "ArrayBuffer byteLength should be 16");
+  assert_true(buffer instanceof ArrayBuffer,
+    "Should be an ArrayBuffer instance");
+}, "TypedArray: ArrayBuffer creation");
+
+test(function () {
+  var u8 = new Uint8Array([10, 20, 30]);
+  assert_equals(u8.length, 3, "Uint8Array length should be 3");
+  assert_equals(u8[0], 10, "First element should be 10");
+  assert_equals(u8[2], 30, "Third element should be 30");
+  assert_true(u8 instanceof Uint8Array,
+    "Should be a Uint8Array instance");
+}, "TypedArray: Uint8Array from array");
+
+test(function () {
+  var buffer = new ArrayBuffer(4);
+  var view = new DataView(buffer);
+  view.setInt16(0, 256, true);
+  assert_equals(view.getInt16(0, true), 256,
+    "DataView should read back written Int16 value");
+}, "TypedArray: DataView setInt16 and getInt16");
+
+test(function () {
+  var a = new Uint8Array([1, 2, 3]);
+  var b = new Uint8Array([4, 5]);
+  var combined = new Uint8Array(a.length + b.length);
+  combined.set(a);
+  combined.set(b, a.length);
+  assert_array_equals(Array.from(combined), [1, 2, 3, 4, 5],
+    "set() should concatenate typed arrays");
+}, "TypedArray: Uint8Array set for concatenation");
+
+// =============================================================
+// 15. structuredClone
+// Covers: html/webappapis/structured-clone/
+// =============================================================
+
+test(function () {
+  var obj = { a: 1, b: [2, 3], c: { d: 4 } };
+  var clone = structuredClone(obj);
+
+  assert_equals(clone.a, 1, "Cloned a should be 1");
+  assert_array_equals(clone.b, [2, 3], "Cloned b should be [2, 3]");
+  assert_equals(clone.c.d, 4, "Cloned c.d should be 4");
+
+  assert_not_equals(clone, obj,
+    "Clone should be a different object");
+  assert_not_equals(clone.b, obj.b,
+    "Cloned array should be a different reference");
+  assert_not_equals(clone.c, obj.c,
+    "Cloned nested object should be a different reference");
+}, "structuredClone: deep clones objects and arrays");
+
+test(function () {
+  var date = new Date("2024-01-01T00:00:00Z");
+  var clone = structuredClone(date);
+  assert_equals(clone.getTime(), date.getTime(),
+    "Cloned Date should have same time value");
+  assert_not_equals(clone, date,
+    "Cloned Date should be a different object");
+}, "structuredClone: clones Date objects");
+
+test(function () {
+  var map = new Map([["a", 1]]);
+  var set = new Set([1, 2, 3]);
+  var clonedMap = structuredClone(map);
+  var clonedSet = structuredClone(set);
+
+  assert_equals(clonedMap.get("a"), 1,
+    "Cloned Map should preserve entries");
+  assert_true(clonedSet.has(2),
+    "Cloned Set should preserve values");
+}, "structuredClone: clones Map and Set");
+
+// =============================================================
+// 16. Error Types
+// Covers: js/builtins/ (Error constructors)
+// =============================================================
+
+test(function () {
+  var errors = [
+    { Ctor: TypeError, name: "TypeError" },
+    { Ctor: RangeError, name: "RangeError" },
+    { Ctor: ReferenceError, name: "ReferenceError" },
+    { Ctor: SyntaxError, name: "SyntaxError" },
+    { Ctor: URIError, name: "URIError" },
+    { Ctor: EvalError, name: "EvalError" }
+  ];
+  errors.forEach(function (spec) {
+    var err = new spec.Ctor("msg");
+    assert_true(err instanceof Error,
+      spec.name + " should be instance of Error");
+    assert_true(err instanceof spec.Ctor,
+      "Should be instance of " + spec.name);
+    assert_equals(err.message, "msg",
+      spec.name + " message should be 'msg'");
+    assert_equals(err.name, spec.name,
+      "name should be '" + spec.name + "'");
+  });
+}, "Error: built-in error types and inheritance");
+
+// =============================================================
+// 17. Integration: Combining multiple ES features
+// Cross-feature test
+// =============================================================
+
+promise_test(function () {
+  // Use a generator to produce data, collect via spread, transform via
+  // Map/Set, serialize via structuredClone, and verify via Promise chain.
+  function* fibonacci() {
+    var a = 0, b = 1;
+    for (var i = 0; i < 8; i++) {
+      yield a;
+      var tmp = a;
+      a = b;
+      b = tmp + b;
+    }
+  }
+
+  var fibs = [...fibonacci()];
+  assert_array_equals(fibs, [0, 1, 1, 2, 3, 5, 8, 13],
+    "Generator should produce Fibonacci sequence");
+
+  // Deduplicate via Set and convert to Map
+  var unique = new Set(fibs);
+  var indexed = new Map();
+  var idx = 0;
+  for (var val of unique) {
+    indexed.set(idx++, val);
+  }
+
+  // Clone the map and verify via Promise
+  var cloned = structuredClone(indexed);
+  return Promise.resolve(cloned).then(function (m) {
+    assert_equals(m.get(0), 0, "First Fibonacci number should be 0");
+    assert_equals(m.get(6), 13, "Last unique Fibonacci number should be 13");
+    assert_true(m.size <= fibs.length,
+      "Cloned Map size should not exceed array length");
+  });
+}, "Integration: generator + Set + Map + structuredClone + Promise");
+</script>

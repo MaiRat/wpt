@@ -23,11 +23,11 @@ existing granular tests in the repository.
 | **Forms** | `forms/` | Input types, constraint validation, form submission |
 | **Web APIs** | `web-apis/` | Fetch, Web Storage, URL, Encoding, and Streams |
 | **Accessibility** | `accessibility/` | ARIA roles, states, properties, keyboard focus |
+| **JavaScript/ECMAScript** | `javascript/` | Promises, iterators, generators, Map/Set, Proxy/Reflect, typed arrays, structuredClone |
+| **Security** | `security/` | CSP, CORS, iframe sandbox, SRI, referrer policy, crypto API |
 
 ### Planned Categories (future work)
 
-- **JavaScript/ECMAScript** — High-level JS behavioral and compliance tests
-- **Security** — CSP, CORS, and XSS vector tests
 - **Performance** — Macro-level benchmarks (TBD)
 
 Categories that grow too large should be subdivided (e.g., `dom/events/`,
