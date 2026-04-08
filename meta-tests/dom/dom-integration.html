@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>DOM Integration — Consolidated DOM Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://dom.spec.whatwg.org/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: dom/dom-integration.html
+  Exercises core DOM features together in a single integrated page.
+
+  Covers atomic test areas:
+    - dom/nodes/ (createElement, appendChild, removeChild, cloneNode, etc.)
+    - dom/events/ (addEventListener, dispatchEvent, Event constructors)
+    - dom/traversal/ (TreeWalker, NodeIterator)
+    - dom/ranges/ (Range creation, manipulation)
+    - dom/collections/ (NodeList, HTMLCollection)
+    - dom/lists/ (DOMTokenList / classList)
+    - dom/abort/ (AbortController, AbortSignal)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. Node creation and manipulation
+// Covers: dom/nodes/Document-createElement.html
+//         dom/nodes/Node-appendChild.html
+//         dom/nodes/Node-removeChild.html
+//         dom/nodes/Node-textContent.html
+// =============================================================
+
+test(function () {
+  var div = document.createElement("div");
+  assert_equals(div.nodeName, "DIV", "createElement should produce correct nodeName");
+  assert_equals(div.nodeType, Node.ELEMENT_NODE, "nodeType should be ELEMENT_NODE");
+  cleanup();
+}, "Nodes: createElement creates element with correct properties");
+
+test(function () {
+  var parent = document.createElement("div");
+  var child = document.createElement("span");
+  var returned = parent.appendChild(child);
+
+  assert_equals(returned, child, "appendChild should return the appended child");
+  assert_equals(parent.childNodes.length, 1, "Parent should have one child");
+  assert_equals(parent.firstChild, child, "firstChild should be the appended child");
+  assert_equals(child.parentNode, parent, "Child's parentNode should be the parent");
+  cleanup();
+}, "Nodes: appendChild attaches child and sets parentNode");
+
+test(function () {
+  var parent = document.createElement("div");
+  var child = document.createElement("span");
+  parent.appendChild(child);
+  var removed = parent.removeChild(child);
+
+  assert_equals(removed, child, "removeChild should return the removed node");
+  assert_equals(parent.childNodes.length, 0, "Parent should have no children");
+  assert_equals(child.parentNode, null, "Removed child's parentNode should be null");
+  cleanup();
+}, "Nodes: removeChild detaches child and clears parentNode");
+
+test(function () {
+  var el = document.createElement("div");
+  el.textContent = "Hello World";
+  assert_equals(el.textContent, "Hello World", "textContent should return set text");
+  assert_equals(el.childNodes.length, 1, "Should have one text node child");
+  assert_equals(el.firstChild.nodeType, Node.TEXT_NODE, "Child should be a text node");
+  cleanup();
+}, "Nodes: textContent creates text node children");
+
+// =============================================================
+// 2. Node cloning
+// Covers: dom/nodes/Node-cloneNode.html
+// =============================================================
+
+test(function () {
+  var orig = document.createElement("div");
+  orig.setAttribute("data-test", "value");
+  orig.appendChild(document.createElement("span"));
+
+  var shallow = orig.cloneNode(false);
+  assert_equals(shallow.getAttribute("data-test"), "value",
+    "Shallow clone preserves attributes");
+  assert_equals(shallow.childNodes.length, 0,
+    "Shallow clone should have no children");
+
+  var deep = orig.cloneNode(true);
+  assert_equals(deep.childNodes.length, 1,
+    "Deep clone should have children");
+  assert_not_equals(deep.firstChild, orig.firstChild,
+    "Deep-cloned children should be different node objects");
+  cleanup();
+}, "Nodes: cloneNode shallow vs deep");
+
+// =============================================================
+// 3. Node comparison
+// Covers: dom/nodes/Node-contains.html
+//         dom/nodes/Node-compareDocumentPosition.html
+//         dom/nodes/Node-isEqualNode.html
+// =============================================================
+
+test(function () {
+  var parent = document.createElement("div");
+  var child = document.createElement("span");
+  parent.appendChild(child);
+
+  assert_true(parent.contains(child), "Parent should contain child");
+  assert_true(parent.contains(parent), "Node should contain itself");
+  assert_false(child.contains(parent), "Child should not contain parent");
+  cleanup();
+}, "Nodes: contains checks ancestor relationship");
+
+test(function () {
+  var a = document.createElement("div");
+  a.setAttribute("id", "eq");
+  a.textContent = "same";
+  var b = document.createElement("div");
+  b.setAttribute("id", "eq");
+  b.textContent = "same";
+
+  assert_true(a.isEqualNode(b), "Nodes with same structure should be equal");
+  assert_false(a.isSameNode(b), "Different node objects should not be same");
+  cleanup();
+}, "Nodes: isEqualNode vs isSameNode");
+
+// =============================================================
+// 4. Events
+// Covers: dom/events/Event-constructors.any.js
+//         dom/events/Event-dispatch-order.html
+//         dom/events/AddEventListenerOptions-signal.any.js
+// =============================================================
+
+test(function () {
+  var event = new Event("click", { bubbles: true, cancelable: true });
+  assert_equals(event.type, "click", "Event type should be 'click'");
+  assert_true(event.bubbles, "Event should bubble");
+  assert_true(event.cancelable, "Event should be cancelable");
+  assert_false(event.defaultPrevented, "defaultPrevented should initially be false");
+  cleanup();
+}, "Events: Event constructor sets properties correctly");
+
+test(function () {
+  var el = document.createElement("div");
+  container.appendChild(el);
+  var called = false;
+
+  el.addEventListener("custom-test", function () {
+    called = true;
+  });
+  el.dispatchEvent(new Event("custom-test"));
+
+  assert_true(called, "Custom event listener should be called");
+  cleanup();
+}, "Events: addEventListener and dispatchEvent work for custom events");
+
+test(function () {
+  var parent = document.createElement("div");
+  var child = document.createElement("span");
+  parent.appendChild(child);
+  container.appendChild(parent);
+
+  var order = [];
+  parent.addEventListener("custom-bubble", function () {
+    order.push("parent");
+  });
+  child.addEventListener("custom-bubble", function () {
+    order.push("child");
+  });
+  child.dispatchEvent(new Event("custom-bubble", { bubbles: true }));
+
+  assert_array_equals(order, ["child", "parent"],
+    "Bubbling event should fire on child then parent");
+  cleanup();
+}, "Events: bubbling dispatches in correct order");
+
+test(function () {
+  var el = document.createElement("div");
+  container.appendChild(el);
+  var count = 0;
+
+  el.addEventListener("once-test", function () {
+    count++;
+  }, { once: true });
+
+  el.dispatchEvent(new Event("once-test"));
+  el.dispatchEvent(new Event("once-test"));
+
+  assert_equals(count, 1, "once:true listener should fire only once");
+  cleanup();
+}, "Events: once option removes listener after first invocation");
+
+test(function () {
+  var el = document.createElement("div");
+  container.appendChild(el);
+  var called = false;
+  var ac = new AbortController();
+
+  el.addEventListener("signal-test", function () {
+    called = true;
+  }, { signal: ac.signal });
+
+  ac.abort();
+  el.dispatchEvent(new Event("signal-test"));
+
+  assert_false(called, "Listener removed via AbortController should not fire");
+  cleanup();
+}, "Events: AbortController signal removes event listener");
+
+// =============================================================
+// 5. DOM Traversal
+// Covers: dom/traversal/TreeWalker.html
+//         dom/traversal/NodeIterator.html
+// =============================================================
+
+test(function () {
+  var root = document.createElement("div");
+  var child1 = document.createElement("p");
+  var child2 = document.createElement("span");
+  var grandchild = document.createElement("em");
+  child1.appendChild(grandchild);
+  root.appendChild(child1);
+  root.appendChild(child2);
+
+  var tw = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  var nodes = [];
+  var node;
+  while (node = tw.nextNode()) {
+    nodes.push(node);
+  }
+  assert_array_equals(nodes, [child1, grandchild, child2],
+    "TreeWalker should traverse elements in document order");
+  cleanup();
+}, "Traversal: TreeWalker visits elements in document order");
+
+test(function () {
+  var root = document.createElement("div");
+  root.appendChild(document.createTextNode("text1"));
+  root.appendChild(document.createElement("span"));
+  root.appendChild(document.createTextNode("text2"));
+
+  var ni = document.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+  var texts = [];
+  var node;
+  while (node = ni.nextNode()) {
+    texts.push(node.data);
+  }
+  assert_array_equals(texts, ["text1", "text2"],
+    "NodeIterator with SHOW_TEXT should find only text nodes");
+  cleanup();
+}, "Traversal: NodeIterator filters by SHOW_TEXT");
+
+// =============================================================
+// 6. Ranges
+// Covers: dom/ranges/Range-constructor.html
+//         dom/ranges/Range-mutations.html
+// =============================================================
+
+test(function () {
+  var el = document.createElement("div");
+  el.innerHTML = "<span>Hello</span> <em>World</em>";
+  container.appendChild(el);
+
+  var range = document.createRange();
+  range.selectNodeContents(el);
+
+  assert_equals(range.startContainer, el, "startContainer should be the element");
+  assert_equals(range.startOffset, 0, "startOffset should be 0");
+  assert_equals(range.endContainer, el, "endContainer should be the element");
+  assert_equals(range.endOffset, el.childNodes.length,
+    "endOffset should match child count");
+  assert_equals(range.toString(), "Hello World",
+    "Range.toString should return text content");
+  cleanup();
+}, "Ranges: selectNodeContents captures all children");
+
+test(function () {
+  var el = document.createElement("div");
+  el.textContent = "ABCDEF";
+  container.appendChild(el);
+
+  var range = document.createRange();
+  range.setStart(el.firstChild, 2);
+  range.setEnd(el.firstChild, 5);
+
+  assert_equals(range.toString(), "CDE",
+    "Range should extract substring from text node");
+  cleanup();
+}, "Ranges: setStart/setEnd on text node extracts substring");
+
+// =============================================================
+// 7. Collections
+// Covers: dom/collections/HTMLCollection-*.html
+//         dom/nodes/NodeList-*.html
+// =============================================================
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<p class='c'>A</p><p class='c'>B</p><span class='c'>C</span>";
+  container.appendChild(div);
+
+  var byClass = div.getElementsByClassName("c");
+  assert_equals(byClass.length, 3, "getElementsByClassName should find 3 elements");
+  assert_true(byClass instanceof HTMLCollection,
+    "Result should be an HTMLCollection");
+
+  // Live collection: adding an element updates it
+  var extra = document.createElement("em");
+  extra.className = "c";
+  div.appendChild(extra);
+  assert_equals(byClass.length, 4,
+    "Live HTMLCollection should reflect DOM changes");
+  cleanup();
+}, "Collections: getElementsByClassName returns live HTMLCollection");
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<p>1</p><p>2</p><p>3</p>";
+  container.appendChild(div);
+
+  var qs = div.querySelectorAll("p");
+  assert_equals(qs.length, 3, "querySelectorAll should find 3 elements");
+  assert_true(qs instanceof NodeList, "Result should be a NodeList");
+
+  // Static collection: adding an element does NOT update it
+  div.appendChild(document.createElement("p"));
+  assert_equals(qs.length, 3,
+    "Static NodeList should not reflect DOM changes");
+  cleanup();
+}, "Collections: querySelectorAll returns static NodeList");
+
+// =============================================================
+// 8. classList / DOMTokenList
+// Covers: dom/nodes/Element-classlist.html
+// =============================================================
+
+test(function () {
+  var el = document.createElement("div");
+  el.classList.add("alpha", "beta");
+  assert_true(el.classList.contains("alpha"), "Should contain 'alpha'");
+  assert_true(el.classList.contains("beta"), "Should contain 'beta'");
+  assert_equals(el.classList.length, 2, "Should have 2 classes");
+
+  el.classList.remove("alpha");
+  assert_false(el.classList.contains("alpha"), "Should no longer contain 'alpha'");
+
+  el.classList.toggle("gamma");
+  assert_true(el.classList.contains("gamma"), "toggle should add 'gamma'");
+  el.classList.toggle("gamma");
+  assert_false(el.classList.contains("gamma"), "toggle should remove 'gamma'");
+  cleanup();
+}, "classList: add, remove, toggle, contains work correctly");
+
+// =============================================================
+// 9. AbortController
+// Covers: dom/abort/
+// =============================================================
+
+test(function () {
+  var ac = new AbortController();
+  assert_false(ac.signal.aborted, "Signal should not be aborted initially");
+
+  var reason;
+  ac.signal.addEventListener("abort", function () {
+    reason = ac.signal.reason;
+  });
+
+  ac.abort("test reason");
+  assert_true(ac.signal.aborted, "Signal should be aborted after abort()");
+  assert_equals(reason, "test reason", "Abort reason should be passed");
+  cleanup();
+}, "AbortController: abort() sets signal.aborted and fires event");
+
+// =============================================================
+// 10. MutationObserver
+// Covers: dom/nodes/MutationObserver-*.html
+// =============================================================
+
+async_test(function (t) {
+  var target = document.createElement("div");
+  container.appendChild(target);
+
+  var observer = new MutationObserver(t.step_func(function (mutations) {
+    assert_equals(mutations.length, 1, "Should have 1 mutation");
+    assert_equals(mutations[0].type, "childList", "Type should be childList");
+    assert_equals(mutations[0].addedNodes.length, 1, "Should have 1 added node");
+    observer.disconnect();
+    cleanup();
+    t.done();
+  }));
+
+  observer.observe(target, { childList: true });
+  target.appendChild(document.createElement("span"));
+}, "MutationObserver: childList mutation fires for appendChild");
+
+// =============================================================
+// 11. Integration: Complex DOM operations
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  // Build a small DOM tree
+  var root = document.createElement("section");
+  root.id = "integration-root";
+  var ul = document.createElement("ul");
+  for (var i = 0; i < 5; i++) {
+    var li = document.createElement("li");
+    li.textContent = "Item " + i;
+    li.dataset.index = i;
+    ul.appendChild(li);
+  }
+  root.appendChild(ul);
+  container.appendChild(root);
+
+  // querySelector finds nested elements
+  var item2 = root.querySelector("li[data-index='2']");
+  assert_equals(item2.textContent, "Item 2",
+    "querySelector should find correct li");
+
+  // insertBefore works
+  var newItem = document.createElement("li");
+  newItem.textContent = "Inserted";
+  ul.insertBefore(newItem, item2);
+  assert_equals(ul.children[2].textContent, "Inserted",
+    "insertBefore should place element correctly");
+
+  // replaceChild works
+  var replacement = document.createElement("li");
+  replacement.textContent = "Replaced";
+  ul.replaceChild(replacement, newItem);
+  assert_equals(ul.children[2].textContent, "Replaced",
+    "replaceChild should swap elements");
+
+  // TreeWalker over the result
+  var tw = document.createTreeWalker(ul, NodeFilter.SHOW_ELEMENT);
+  var count = 0;
+  while (tw.nextNode()) count++;
+  assert_equals(count, 5, "TreeWalker should find 5 li elements in final tree");
+
+  cleanup();
+}, "Integration: querySelector + insertBefore + replaceChild + TreeWalker");
+</script>

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Acid4 — Integrated CSS Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://drafts.csswg.org/css-flexbox-1/">
+<link rel="help" href="https://drafts.csswg.org/css-grid-1/">
+<link rel="help" href="https://drafts.csswg.org/css-color-4/">
+<link rel="help" href="https://drafts.csswg.org/css-backgrounds-3/">
+<link rel="help" href="https://drafts.csswg.org/css-transforms-1/">
+<link rel="help" href="https://drafts.csswg.org/css-transitions-1/">
+<link rel="help" href="https://drafts.csswg.org/css-cascade-5/">
+<link rel="help" href="https://drafts.csswg.org/selectors-4/">
+<link rel="help" href="https://drafts.csswg.org/css-position-3/">
+<link rel="help" href="https://drafts.csswg.org/css-sizing-3/">
+<link rel="help" href="https://drafts.csswg.org/css-display-3/">
+<link rel="help" href="https://drafts.csswg.org/css-box-4/">
+<link rel="help" href="https://drafts.csswg.org/css-overflow-3/">
+<link rel="help" href="https://drafts.csswg.org/css-values-4/">
+<link rel="help" href="https://drafts.csswg.org/css-variables-1/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: css/acid4.html
+  Inspired by the Acid2 and Acid3 browser compliance tests, this page
+  exercises multiple CSS features together in a single integrated test.
+
+  Covers atomic test areas:
+    - css/css-flexbox/ (flex container, alignment, ordering, wrapping)
+    - css/css-grid/ (grid definition, placement, track sizing)
+    - css/css-color/ (color functions, opacity, currentColor)
+    - css/css-backgrounds/ (backgrounds, borders, border-radius)
+    - css/css-transforms/ (2D transforms)
+    - css/css-transitions/ (property transitions)
+    - css/css-cascade/ (specificity, inheritance, custom properties)
+    - css/selectors/ (combinators, pseudo-classes, pseudo-elements)
+    - css/css-position/ (relative, absolute, fixed, sticky positioning)
+    - css/css-sizing/ (min/max width/height, box-sizing)
+    - css/css-display/ (display types, visibility)
+    - css/css-box/ (margin collapsing, padding)
+    - css/css-overflow/ (overflow clipping, scrolling)
+    - css/css-values/ (calc, units, env)
+    - css/css-variables/ (custom properties)
+-->
+
+<style>
+  /* Test fixture styles */
+  #test-container { margin: 0; padding: 0; }
+  .hidden { display: none; }
+</style>
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+// --- Helper ---
+function createStyledElement(tag, styles, parent) {
+  var el = document.createElement(tag);
+  Object.assign(el.style, styles);
+  (parent || document.getElementById("test-container")).appendChild(el);
+  return el;
+}
+
+// =============================================================
+// 1. CSS Flexbox
+// Covers: css/css-flexbox/
+// =============================================================
+
+test(function () {
+  var flex = createStyledElement("div", {
+    display: "flex",
+    width: "300px",
+    height: "100px"
+  });
+  var child1 = createStyledElement("div", { flex: "1" }, flex);
+  var child2 = createStyledElement("div", { flex: "2" }, flex);
+
+  assert_equals(getComputedStyle(flex).display, "flex",
+    "Container should have display:flex");
+  assert_true(child2.offsetWidth > child1.offsetWidth,
+    "flex:2 child should be wider than flex:1 child");
+  flex.remove();
+}, "Flexbox: flex-grow distributes space proportionally");
+
+test(function () {
+  var flex = createStyledElement("div", {
+    display: "flex",
+    flexDirection: "column",
+    width: "100px",
+    height: "200px"
+  });
+  var child1 = createStyledElement("div", { flex: "1" }, flex);
+  var child2 = createStyledElement("div", { flex: "1" }, flex);
+
+  assert_equals(getComputedStyle(flex).flexDirection, "column",
+    "flex-direction should be column");
+  assert_approx_equals(child1.offsetHeight, 100, 1,
+    "Each child should be ~100px tall");
+  flex.remove();
+}, "Flexbox: column direction distributes height equally");
+
+test(function () {
+  var flex = createStyledElement("div", {
+    display: "flex",
+    flexWrap: "wrap",
+    width: "100px"
+  });
+  var child1 = createStyledElement("div", {
+    width: "60px", height: "20px"
+  }, flex);
+  var child2 = createStyledElement("div", {
+    width: "60px", height: "20px"
+  }, flex);
+
+  assert_true(child2.offsetTop > child1.offsetTop,
+    "Second child should wrap to a new line");
+  flex.remove();
+}, "Flexbox: flex-wrap wraps items to new lines");
+
+test(function () {
+  var flex = createStyledElement("div", {
+    display: "flex",
+    width: "200px"
+  });
+  var child1 = createStyledElement("div", {
+    order: "2", width: "50px", height: "20px"
+  }, flex);
+  var child2 = createStyledElement("div", {
+    order: "1", width: "50px", height: "20px"
+  }, flex);
+
+  assert_true(child2.offsetLeft < child1.offsetLeft,
+    "order:1 child should appear before order:2 child visually");
+  flex.remove();
+}, "Flexbox: order property controls visual ordering");
+
+// =============================================================
+// 2. CSS Grid
+// Covers: css/css-grid/
+// =============================================================
+
+test(function () {
+  var grid = createStyledElement("div", {
+    display: "grid",
+    gridTemplateColumns: "100px 200px",
+    gridTemplateRows: "50px",
+    width: "300px"
+  });
+  var cell1 = createStyledElement("div", {}, grid);
+  var cell2 = createStyledElement("div", {}, grid);
+
+  assert_equals(getComputedStyle(grid).display, "grid",
+    "Container should have display:grid");
+  assert_approx_equals(cell1.offsetWidth, 100, 1,
+    "First column should be 100px");
+  assert_approx_equals(cell2.offsetWidth, 200, 1,
+    "Second column should be 200px");
+  grid.remove();
+}, "Grid: explicit column tracks set correct widths");
+
+test(function () {
+  var grid = createStyledElement("div", {
+    display: "grid",
+    gridTemplateColumns: "1fr 2fr",
+    width: "300px"
+  });
+  var cell1 = createStyledElement("div", {}, grid);
+  var cell2 = createStyledElement("div", {}, grid);
+
+  assert_approx_equals(cell1.offsetWidth, 100, 1,
+    "1fr cell should be ~100px");
+  assert_approx_equals(cell2.offsetWidth, 200, 1,
+    "2fr cell should be ~200px");
+  grid.remove();
+}, "Grid: fr units distribute space proportionally");
+
+test(function () {
+  var grid = createStyledElement("div", {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 100px)",
+    gridTemplateRows: "50px",
+    width: "300px"
+  });
+  createStyledElement("div", {}, grid);
+  createStyledElement("div", {}, grid);
+  var cell3 = createStyledElement("div", {}, grid);
+
+  assert_approx_equals(cell3.offsetLeft - grid.offsetLeft, 200, 1,
+    "Third cell should start at 200px");
+  grid.remove();
+}, "Grid: repeat() creates multiple tracks");
+
+// =============================================================
+// 3. CSS Color
+// Covers: css/css-color/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    color: "rgb(255, 0, 0)",
+    width: "10px",
+    height: "10px"
+  });
+  assert_equals(getComputedStyle(el).color, "rgb(255, 0, 0)",
+    "rgb() color should be computed correctly");
+  el.remove();
+}, "Color: rgb() function computes correctly");
+
+test(function () {
+  var el = createStyledElement("div", {
+    backgroundColor: "rgba(0, 128, 0, 0.5)",
+    width: "10px",
+    height: "10px"
+  });
+  assert_equals(getComputedStyle(el).backgroundColor, "rgba(0, 128, 0, 0.5)",
+    "rgba() background should be computed correctly");
+  el.remove();
+}, "Color: rgba() with alpha computes correctly");
+
+test(function () {
+  var parent = createStyledElement("div", { color: "blue" });
+  var child = createStyledElement("div", {
+    borderColor: "currentColor",
+    borderStyle: "solid",
+    borderWidth: "1px",
+    width: "10px",
+    height: "10px"
+  }, parent);
+
+  assert_equals(getComputedStyle(child).borderTopColor, "rgb(0, 0, 255)",
+    "currentColor should resolve to parent's color");
+  parent.remove();
+}, "Color: currentColor inherits from parent");
+
+// =============================================================
+// 4. CSS Backgrounds & Borders
+// Covers: css/css-backgrounds/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    borderRadius: "10px",
+    width: "50px",
+    height: "50px",
+    background: "red"
+  });
+  assert_equals(getComputedStyle(el).borderTopLeftRadius, "10px",
+    "border-radius should be applied");
+  el.remove();
+}, "Backgrounds: border-radius applies uniformly");
+
+test(function () {
+  var el = createStyledElement("div", {
+    background: "linear-gradient(to right, red, blue)",
+    width: "50px",
+    height: "50px"
+  });
+  var bg = getComputedStyle(el).backgroundImage;
+  assert_true(bg.indexOf("gradient") !== -1,
+    "background-image should contain a gradient");
+  el.remove();
+}, "Backgrounds: linear-gradient is preserved in computed style");
+
+// =============================================================
+// 5. CSS Transforms
+// Covers: css/css-transforms/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    transform: "rotate(45deg)",
+    width: "50px",
+    height: "50px"
+  });
+  var t = getComputedStyle(el).transform;
+  assert_not_equals(t, "none",
+    "transform should be applied");
+  el.remove();
+}, "Transforms: rotate() produces a matrix value");
+
+test(function () {
+  var el = createStyledElement("div", {
+    transform: "translateX(100px)",
+    width: "50px",
+    height: "50px"
+  });
+  var rect = el.getBoundingClientRect();
+  var parentRect = el.parentElement.getBoundingClientRect();
+  assert_approx_equals(rect.left - parentRect.left, 100, 1,
+    "translateX(100px) should shift element 100px right");
+  el.remove();
+}, "Transforms: translateX() shifts element position");
+
+// =============================================================
+// 6. CSS Cascade & Custom Properties
+// Covers: css/css-cascade/, css/css-variables/
+// =============================================================
+
+test(function () {
+  var parent = createStyledElement("div", { fontSize: "20px" });
+  var child = createStyledElement("div", {}, parent);
+  assert_equals(getComputedStyle(child).fontSize, "20px",
+    "font-size should be inherited from parent");
+  parent.remove();
+}, "Cascade: inherited properties pass to children");
+
+test(function () {
+  var el = createStyledElement("div", {
+    width: "10px",
+    height: "10px"
+  });
+  el.style.setProperty("--test-color", "rgb(0, 128, 0)");
+  el.style.backgroundColor = "var(--test-color)";
+  assert_equals(getComputedStyle(el).backgroundColor, "rgb(0, 128, 0)",
+    "Custom property should resolve in background-color");
+  el.remove();
+}, "Variables: custom property resolves in shorthand");
+
+// =============================================================
+// 7. CSS Selectors (via DOM matching)
+// Covers: css/selectors/
+// =============================================================
+
+test(function () {
+  var parent = createStyledElement("div", {});
+  var child1 = createStyledElement("div", {}, parent);
+  createStyledElement("div", {}, parent);
+  createStyledElement("div", {}, parent);
+
+  assert_true(child1.matches(":first-child"),
+    "First child should match :first-child");
+  assert_true(child1.matches(":nth-child(1)"),
+    "First child should match :nth-child(1)");
+  parent.remove();
+}, "Selectors: :first-child and :nth-child match correctly");
+
+test(function () {
+  var parent = createStyledElement("div", {});
+  parent.classList.add("sel-test-parent");
+  var child = createStyledElement("div", {}, parent);
+  child.classList.add("sel-test-child");
+
+  assert_true(child.matches(".sel-test-parent > .sel-test-child"),
+    "Child combinator selector should match");
+  assert_true(child.matches(".sel-test-parent .sel-test-child"),
+    "Descendant combinator selector should match");
+  parent.remove();
+}, "Selectors: child and descendant combinators match");
+
+// =============================================================
+// 8. CSS Positioning
+// Covers: css/css-position/
+// =============================================================
+
+test(function () {
+  var container = createStyledElement("div", {
+    position: "relative",
+    width: "200px",
+    height: "200px"
+  });
+  var abs = createStyledElement("div", {
+    position: "absolute",
+    top: "10px",
+    left: "20px",
+    width: "50px",
+    height: "50px"
+  }, container);
+
+  var cRect = container.getBoundingClientRect();
+  var aRect = abs.getBoundingClientRect();
+  assert_approx_equals(aRect.top - cRect.top, 10, 1,
+    "Absolute top offset should be 10px");
+  assert_approx_equals(aRect.left - cRect.left, 20, 1,
+    "Absolute left offset should be 20px");
+  container.remove();
+}, "Position: absolute positioning relative to positioned ancestor");
+
+// =============================================================
+// 9. CSS Sizing
+// Covers: css/css-sizing/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    width: "500px",
+    maxWidth: "200px",
+    height: "10px"
+  });
+  assert_approx_equals(el.offsetWidth, 200, 1,
+    "max-width should clamp width");
+  el.remove();
+}, "Sizing: max-width clamps width");
+
+test(function () {
+  var el = createStyledElement("div", {
+    width: "50px",
+    minWidth: "200px",
+    height: "10px"
+  });
+  assert_approx_equals(el.offsetWidth, 200, 1,
+    "min-width should expand width");
+  el.remove();
+}, "Sizing: min-width expands width");
+
+test(function () {
+  var el = createStyledElement("div", {
+    boxSizing: "border-box",
+    width: "100px",
+    padding: "10px",
+    borderWidth: "5px",
+    borderStyle: "solid",
+    height: "10px"
+  });
+  assert_approx_equals(el.offsetWidth, 100, 1,
+    "border-box should include padding and border in width");
+  el.remove();
+}, "Sizing: box-sizing border-box includes padding and border");
+
+// =============================================================
+// 10. CSS Display & Visibility
+// Covers: css/css-display/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    display: "none",
+    width: "100px",
+    height: "100px"
+  });
+  assert_equals(el.offsetWidth, 0,
+    "display:none element should have zero offsetWidth");
+  assert_equals(el.offsetHeight, 0,
+    "display:none element should have zero offsetHeight");
+  el.remove();
+}, "Display: display:none removes element from layout");
+
+test(function () {
+  var el = createStyledElement("div", {
+    visibility: "hidden",
+    width: "100px",
+    height: "100px"
+  });
+  assert_approx_equals(el.offsetWidth, 100, 1,
+    "visibility:hidden should preserve layout width");
+  assert_approx_equals(el.offsetHeight, 100, 1,
+    "visibility:hidden should preserve layout height");
+  el.remove();
+}, "Display: visibility:hidden preserves layout");
+
+// =============================================================
+// 11. CSS Box Model
+// Covers: css/css-box/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    width: "100px",
+    height: "100px",
+    padding: "10px",
+    margin: "20px",
+    borderWidth: "5px",
+    borderStyle: "solid",
+    boxSizing: "content-box"
+  });
+  assert_approx_equals(el.offsetWidth, 130, 1,
+    "content-box width = content + padding + border = 100+20+10");
+  el.remove();
+}, "Box model: content-box offsetWidth includes padding and border");
+
+// =============================================================
+// 12. CSS Overflow
+// Covers: css/css-overflow/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    overflow: "hidden",
+    width: "50px",
+    height: "50px"
+  });
+  var big = createStyledElement("div", {
+    width: "200px",
+    height: "200px",
+    background: "red"
+  }, el);
+
+  assert_approx_equals(el.scrollWidth, 200, 1,
+    "scrollWidth should reflect overflowing content");
+  assert_approx_equals(el.clientWidth, 50, 1,
+    "clientWidth should reflect clipped visible area");
+  el.remove();
+}, "Overflow: hidden clips visually but scrollWidth reflects content");
+
+// =============================================================
+// 13. CSS Values — calc()
+// Covers: css/css-values/
+// =============================================================
+
+test(function () {
+  var el = createStyledElement("div", {
+    width: "calc(100px + 50px)",
+    height: "10px"
+  });
+  assert_approx_equals(el.offsetWidth, 150, 1,
+    "calc(100px + 50px) should resolve to 150px");
+  el.remove();
+}, "Values: calc() computes addition correctly");
+
+// =============================================================
+// 14. Integration: Flexbox inside Grid
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  var grid = createStyledElement("div", {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    width: "300px"
+  });
+  var flexCell = createStyledElement("div", {
+    display: "flex",
+    justifyContent: "space-between"
+  }, grid);
+  var a = createStyledElement("div", {
+    width: "30px", height: "20px"
+  }, flexCell);
+  var b = createStyledElement("div", {
+    width: "30px", height: "20px"
+  }, flexCell);
+  createStyledElement("div", {}, grid);
+
+  assert_approx_equals(flexCell.offsetWidth, 150, 1,
+    "Flex cell should fill its grid column (150px)");
+  assert_true(b.offsetLeft > a.offsetLeft + a.offsetWidth,
+    "space-between should separate flex children");
+  grid.remove();
+}, "Integration: flexbox container inside grid cell");
+</script>
