@@ -25,7 +25,7 @@ existing granular tests in the repository.
 | **Accessibility** | `accessibility/` | ARIA roles, states, properties, keyboard focus |
 | **JavaScript/ECMAScript** | `javascript/` | Promises, iterators, generators, Map/Set, Proxy/Reflect, typed arrays, structuredClone |
 | **Security** | `security/` | CSP, CORS, iframe sandbox, SRI, referrer policy, crypto API |
-| **Performance** | `performance/` | High Resolution Time, User Timing, Performance Timeline, Navigation & Resource Timing |
+| **Performance** | `performance/` | High Resolution Time, User Timing, Performance Timeline, Navigation Timing, Resource Timing |
 
 Categories that grow too large should be subdivided (e.g., `dom/events/`,
 `dom/manipulation/`; `graphics/svg/`, `graphics/canvas/`).
