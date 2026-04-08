@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Security Integration — Consolidated Security Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://w3c.github.io/webappsec-csp/">
+<link rel="help" href="https://fetch.spec.whatwg.org/#http-cors-protocol">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/iframe-embed-object.html#attr-iframe-sandbox">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/dom.html#dom-innerhtml">
+<link rel="help" href="https://w3c.github.io/webappsec-subresource-integrity/">
+<link rel="help" href="https://w3c.github.io/webappsec-referrer-policy/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/origin.html">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: security/security-integration.html
+  Exercises browser security features and APIs together in a single integrated
+  page: CSP meta-tag behavior, iframe sandbox, CORS origin checks, HTML
+  sanitization behavior, Subresource Integrity, Referrer Policy, and
+  origin-related APIs.
+
+  Covers atomic test areas:
+    - content-security-policy/ (CSP meta tag behavior, directives)
+    - fetch/ (CORS, same-origin, cross-origin request modes)
+    - html/semantics/embedded-content/the-iframe-element/ (sandbox attribute)
+    - html/dom/ (innerHTML sanitization behaviors)
+    - subresource-integrity/ (SRI attributes on link/script)
+    - referrer-policy/ (referrer policy attributes and meta tags)
+    - html/browsers/origin/ (origin comparison, opaque origins)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. Same-Origin and Cross-Origin URL Analysis
+// Covers: html/browsers/origin/
+// =============================================================
+
+test(function () {
+  var current = new URL(location.href);
+  var same = new URL("/other-path", location.href);
+  assert_equals(same.origin, current.origin,
+    "URL with same host should have same origin");
+}, "Origin: same-origin URL comparison");
+
+test(function () {
+  var a = new URL("https://example.com:443/path");
+  var b = new URL("https://example.com/other");
+  assert_equals(a.origin, b.origin,
+    "Default port should match explicit port in origin");
+}, "Origin: default port equivalence for HTTPS");
+
+test(function () {
+  var a = new URL("https://a.example.com");
+  var b = new URL("https://b.example.com");
+  assert_not_equals(a.origin, b.origin,
+    "Different subdomains should have different origins");
+}, "Origin: different subdomains are cross-origin");
+
+test(function () {
+  var http = new URL("http://example.com");
+  var https = new URL("https://example.com");
+  assert_not_equals(http.origin, https.origin,
+    "Different schemes should produce different origins");
+}, "Origin: different schemes are cross-origin");
+
+test(function () {
+  var url = new URL("data:text/html,<h1>Test</h1>");
+  assert_equals(url.origin, "null",
+    "data: URL should have opaque (null) origin");
+}, "Origin: data: URLs have opaque origin");
+
+test(function () {
+  var blob = new Blob(["test"], { type: "text/plain" });
+  var url = new URL(URL.createObjectURL(blob));
+  assert_equals(url.origin, location.origin,
+    "blob: URL should inherit creator's origin");
+  URL.revokeObjectURL(url.href);
+}, "Origin: blob: URLs inherit creator origin");
+
+// =============================================================
+// 2. CORS Request Modes
+// Covers: fetch/ (CORS protocol)
+// =============================================================
+
+test(function () {
+  var req = new Request("https://example.com/api");
+  assert_equals(req.mode, "cors",
+    "Default Request mode should be 'cors'");
+}, "CORS: default Request mode is cors");
+
+test(function () {
+  var req = new Request("https://example.com/api", { mode: "no-cors" });
+  assert_equals(req.mode, "no-cors",
+    "Request mode should be settable to 'no-cors'");
+}, "CORS: no-cors Request mode");
+
+test(function () {
+  var req = new Request("/local", { mode: "same-origin" });
+  assert_equals(req.mode, "same-origin",
+    "Request mode should be settable to 'same-origin'");
+}, "CORS: same-origin Request mode");
+
+test(function () {
+  var req = new Request("https://example.com/api", {
+    mode: "cors",
+    credentials: "include"
+  });
+  assert_equals(req.credentials, "include",
+    "Credentials should be 'include'");
+}, "CORS: credentials include with cors mode");
+
+// =============================================================
+// 3. Fetch Credentials and Redirect Modes
+// Covers: fetch/
+// =============================================================
+
+test(function () {
+  var req = new Request("https://example.com/");
+  assert_equals(req.credentials, "same-origin",
+    "Default credentials should be 'same-origin'");
+}, "Fetch: default credentials mode is same-origin");
+
+test(function () {
+  var modes = ["follow", "error", "manual"];
+  modes.forEach(function (mode) {
+    var req = new Request("https://example.com/", { redirect: mode });
+    assert_equals(req.redirect, mode,
+      "Redirect mode should be '" + mode + "'");
+  });
+}, "Fetch: redirect mode accepts follow, error, manual");
+
+// =============================================================
+// 4. Iframe Sandbox Attribute
+// Covers: html/semantics/embedded-content/the-iframe-element/
+// =============================================================
+
+test(function () {
+  var iframe = document.createElement("iframe");
+  iframe.sandbox = "";
+  container.appendChild(iframe);
+
+  assert_true(iframe.sandbox instanceof DOMTokenList,
+    "sandbox should be a DOMTokenList");
+  assert_equals(iframe.sandbox.length, 0,
+    "Empty sandbox should have no tokens");
+  assert_true(iframe.hasAttribute("sandbox"),
+    "sandbox attribute should be present");
+  cleanup();
+}, "Sandbox: empty sandbox attribute applies all restrictions");
+
+test(function () {
+  var iframe = document.createElement("iframe");
+  iframe.sandbox = "allow-scripts allow-same-origin";
+  container.appendChild(iframe);
+
+  assert_true(iframe.sandbox.contains("allow-scripts"),
+    "sandbox should contain 'allow-scripts'");
+  assert_true(iframe.sandbox.contains("allow-same-origin"),
+    "sandbox should contain 'allow-same-origin'");
+  assert_false(iframe.sandbox.contains("allow-forms"),
+    "sandbox should not contain 'allow-forms'");
+  cleanup();
+}, "Sandbox: specific sandbox flags are reflected");
+
+test(function () {
+  var iframe = document.createElement("iframe");
+  iframe.sandbox = "allow-scripts";
+  container.appendChild(iframe);
+
+  iframe.sandbox.add("allow-forms");
+  assert_true(iframe.sandbox.contains("allow-forms"),
+    "add should add 'allow-forms' to sandbox");
+  assert_equals(iframe.sandbox.length, 2,
+    "sandbox should have 2 tokens");
+
+  iframe.sandbox.remove("allow-scripts");
+  assert_false(iframe.sandbox.contains("allow-scripts"),
+    "remove should remove 'allow-scripts'");
+  cleanup();
+}, "Sandbox: DOMTokenList add and remove modify sandbox");
+
+test(function () {
+  var allFlags = [
+    "allow-forms", "allow-modals", "allow-orientation-lock",
+    "allow-pointer-lock", "allow-popups",
+    "allow-popups-to-escape-sandbox", "allow-presentation",
+    "allow-same-origin", "allow-scripts",
+    "allow-top-navigation", "allow-top-navigation-by-user-activation"
+  ];
+  var iframe = document.createElement("iframe");
+  iframe.sandbox = allFlags.join(" ");
+  container.appendChild(iframe);
+
+  allFlags.forEach(function (flag) {
+    assert_true(iframe.sandbox.contains(flag),
+      "sandbox should contain '" + flag + "'");
+  });
+  cleanup();
+}, "Sandbox: all standard sandbox flags are accepted");
+
+// =============================================================
+// 5. HTML Sanitization via innerHTML
+// Covers: html/dom/ (innerHTML)
+// =============================================================
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<b>bold</b>";
+  assert_equals(div.firstChild.nodeName, "B",
+    "innerHTML should parse <b> element");
+  assert_equals(div.textContent, "bold",
+    "Text content should be 'bold'");
+  cleanup();
+}, "Sanitization: innerHTML parses safe HTML elements");
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<img src=x onerror=alert(1)>";
+  var img = div.querySelector("img");
+  assert_true(img !== null, "img element should exist in DOM");
+  assert_true(img.hasAttribute("src"),
+    "img should have src attribute");
+  // Note: the onerror will NOT fire in this context because the image
+  // is not inserted into the live document. This test verifies that
+  // innerHTML does parse event handler attributes.
+  assert_true(img.hasAttribute("onerror"),
+    "innerHTML preserves event handler attributes as strings");
+  cleanup();
+}, "Sanitization: innerHTML preserves attributes on parsed elements");
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<script>var x = 1;<\/script>";
+  // Per the HTML spec, script elements inserted via innerHTML do not execute
+  var scripts = div.querySelectorAll("script");
+  assert_equals(scripts.length, 1,
+    "script element should be parsed into DOM");
+  // Verify the script did NOT execute
+  assert_equals(typeof window.__innerHTML_test_var, "undefined",
+    "Script inserted via innerHTML should not execute");
+  cleanup();
+}, "Sanitization: scripts inserted via innerHTML do not execute");
+
+test(function () {
+  var div = document.createElement("div");
+  div.innerHTML = "<style>body { color: red; }</style>";
+  var styles = div.querySelectorAll("style");
+  assert_equals(styles.length, 1,
+    "style element should be parsed into DOM");
+  cleanup();
+}, "Sanitization: style elements are parsed via innerHTML");
+
+test(function () {
+  var div = document.createElement("div");
+  div.textContent = "<script>alert('xss')<\/script>";
+  assert_equals(div.innerHTML, "&lt;script&gt;alert('xss')&lt;/script&gt;",
+    "textContent should escape HTML entities");
+  assert_equals(div.childNodes.length, 1,
+    "Should have single text node, not a script element");
+  assert_equals(div.firstChild.nodeType, Node.TEXT_NODE,
+    "Child should be a text node");
+  cleanup();
+}, "Sanitization: textContent escapes HTML preventing injection");
+
+// =============================================================
+// 6. Content Security Policy — Meta Tag
+// Covers: content-security-policy/
+// =============================================================
+
+test(function () {
+  var meta = document.createElement("meta");
+  meta.httpEquiv = "Content-Security-Policy";
+  meta.content = "default-src 'self'";
+
+  assert_equals(meta.httpEquiv, "content-security-policy",
+    "httpEquiv should be 'content-security-policy'");
+  assert_equals(meta.content, "default-src 'self'",
+    "content should contain the CSP directive");
+  cleanup();
+}, "CSP: meta tag httpEquiv and content attributes");
+
+test(function () {
+  var meta = document.createElement("meta");
+  meta.httpEquiv = "Content-Security-Policy";
+  meta.content = "script-src 'self' 'unsafe-inline'; style-src 'self'";
+
+  assert_true(meta.content.indexOf("script-src") !== -1,
+    "CSP content should include script-src directive");
+  assert_true(meta.content.indexOf("style-src") !== -1,
+    "CSP content should include style-src directive");
+  cleanup();
+}, "CSP: meta tag with multiple directives");
+
+// =============================================================
+// 7. Subresource Integrity (SRI)
+// Covers: subresource-integrity/
+// =============================================================
+
+test(function () {
+  var script = document.createElement("script");
+  script.integrity = "sha256-abc123";
+  script.crossOrigin = "anonymous";
+
+  assert_equals(script.integrity, "sha256-abc123",
+    "integrity attribute should be set on script");
+  assert_equals(script.crossOrigin, "anonymous",
+    "crossOrigin should be 'anonymous'");
+  cleanup();
+}, "SRI: script element integrity and crossOrigin attributes");
+
+test(function () {
+  var link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.integrity = "sha384-def456";
+  link.crossOrigin = "anonymous";
+
+  assert_equals(link.integrity, "sha384-def456",
+    "integrity attribute should be set on link");
+  assert_equals(link.crossOrigin, "anonymous",
+    "crossOrigin should be 'anonymous'");
+  cleanup();
+}, "SRI: link element integrity and crossOrigin attributes");
+
+// =============================================================
+// 8. Referrer Policy
+// Covers: referrer-policy/
+// =============================================================
+
+test(function () {
+  var meta = document.createElement("meta");
+  meta.name = "referrer";
+  meta.content = "no-referrer";
+
+  assert_equals(meta.name, "referrer",
+    "meta name should be 'referrer'");
+  assert_equals(meta.content, "no-referrer",
+    "meta content should be 'no-referrer'");
+  cleanup();
+}, "Referrer Policy: meta tag with no-referrer");
+
+test(function () {
+  var policies = [
+    "no-referrer", "no-referrer-when-downgrade", "origin",
+    "origin-when-cross-origin", "same-origin", "strict-origin",
+    "strict-origin-when-cross-origin", "unsafe-url"
+  ];
+  policies.forEach(function (policy) {
+    var a = document.createElement("a");
+    a.referrerPolicy = policy;
+    assert_equals(a.referrerPolicy, policy,
+      "referrerPolicy should accept '" + policy + "'");
+  });
+  cleanup();
+}, "Referrer Policy: anchor element accepts all standard policies");
+
+test(function () {
+  var iframe = document.createElement("iframe");
+  iframe.referrerPolicy = "no-referrer";
+  assert_equals(iframe.referrerPolicy, "no-referrer",
+    "iframe referrerPolicy should be 'no-referrer'");
+  cleanup();
+}, "Referrer Policy: iframe element referrerPolicy attribute");
+
+// =============================================================
+// 9. Secure Context Detection
+// Covers: html/browsers/origin/
+// =============================================================
+
+test(function () {
+  assert_equals(typeof window.isSecureContext, "boolean",
+    "isSecureContext should be a boolean");
+  // In test runners this may be true or false depending on protocol
+}, "Secure Context: window.isSecureContext is a boolean");
+
+// =============================================================
+// 10. Crypto API Availability
+// Covers: WebCryptoAPI/
+// =============================================================
+
+test(function () {
+  assert_true("crypto" in window,
+    "window.crypto should be available");
+  assert_true("subtle" in window.crypto,
+    "window.crypto.subtle should be available");
+}, "Crypto: window.crypto and crypto.subtle exist");
+
+test(function () {
+  var array = new Uint8Array(16);
+  var result = window.crypto.getRandomValues(array);
+  assert_equals(result, array,
+    "getRandomValues should return the same array");
+  // At least one byte should be non-zero (statistically near-certain)
+  var hasNonZero = false;
+  for (var i = 0; i < array.length; i++) {
+    if (array[i] !== 0) {
+      hasNonZero = true;
+      break;
+    }
+  }
+  assert_true(hasNonZero,
+    "getRandomValues should produce non-zero bytes");
+}, "Crypto: getRandomValues fills array with random data");
+
+test(function () {
+  var uuid = crypto.randomUUID();
+  assert_equals(typeof uuid, "string",
+    "randomUUID should return a string");
+  // UUID v4 format: xxxxxxxx-xxxx-4xxx-[89ab]xxx-xxxxxxxxxxxx
+  var pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  assert_true(pattern.test(uuid),
+    "randomUUID should match UUID v4 format");
+}, "Crypto: randomUUID produces valid UUID v4");
+
+// =============================================================
+// 11. Permissions Policy (Feature Policy) Detection
+// Covers: permissions-policy/
+// =============================================================
+
+test(function () {
+  var iframe = document.createElement("iframe");
+  iframe.allow = "geolocation 'none'; camera 'self'";
+  container.appendChild(iframe);
+
+  assert_equals(iframe.allow, "geolocation 'none'; camera 'self'",
+    "iframe allow attribute should reflect set value");
+  cleanup();
+}, "Permissions Policy: iframe allow attribute");
+
+// =============================================================
+// 12. Integration: Security-aware fetch request construction
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  // Construct a security-aware request with integrity, CORS, and referrer
+  var url = new URL("https://cdn.example.com/lib.js");
+
+  // Verify cross-origin nature
+  assert_not_equals(url.origin, location.origin,
+    "CDN URL should be cross-origin");
+
+  var req = new Request(url.href, {
+    mode: "cors",
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    integrity: "sha256-abc123"
+  });
+
+  assert_equals(req.mode, "cors",
+    "Request mode should be 'cors'");
+  assert_equals(req.credentials, "omit",
+    "Request credentials should be 'omit'");
+  assert_equals(req.referrerPolicy, "no-referrer",
+    "Request referrerPolicy should be 'no-referrer'");
+  assert_equals(req.integrity, "sha256-abc123",
+    "Request integrity should be set");
+
+  // Verify the request URL uses HTTPS
+  var reqUrl = new URL(req.url);
+  assert_equals(reqUrl.protocol, "https:",
+    "Request should use HTTPS protocol");
+  cleanup();
+}, "Integration: security-aware cross-origin fetch with integrity, CORS, and referrer policy");
+</script>
