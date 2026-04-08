@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Web APIs Integration — Consolidated API Feature Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://fetch.spec.whatwg.org/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/webstorage.html">
+<link rel="help" href="https://url.spec.whatwg.org/">
+<link rel="help" href="https://encoding.spec.whatwg.org/">
+<link rel="help" href="https://streams.spec.whatwg.org/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: web-apis/web-apis-integration.html
+  Exercises core Web APIs together in a single integrated page: Fetch,
+  Web Storage, URL, Encoding, and Streams.
+
+  Covers atomic test areas:
+    - fetch/api/ (Request, Response, Headers, fetch())
+    - webstorage/ (localStorage, sessionStorage)
+    - url/ (URL constructor, URLSearchParams)
+    - encoding/ (TextEncoder, TextDecoder)
+    - streams/ (ReadableStream, WritableStream, TransformStream)
+-->
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// =============================================================
+// 1. URL API
+// Covers: url/url-constructor.any.js
+//         url/url-searchparams.any.js
+//         url/url-origin.any.js
+// =============================================================
+
+test(function () {
+  var url = new URL("https://example.com:8080/path?query=1#hash");
+  assert_equals(url.protocol, "https:", "protocol should be 'https:'");
+  assert_equals(url.hostname, "example.com", "hostname should be 'example.com'");
+  assert_equals(url.port, "8080", "port should be '8080'");
+  assert_equals(url.pathname, "/path", "pathname should be '/path'");
+  assert_equals(url.search, "?query=1", "search should be '?query=1'");
+  assert_equals(url.hash, "#hash", "hash should be '#hash'");
+  assert_equals(url.origin, "https://example.com:8080",
+    "origin should include port");
+}, "URL: constructor parses all components correctly");
+
+test(function () {
+  var url = new URL("https://example.com/path");
+  url.pathname = "/new-path";
+  url.search = "?key=val";
+  url.hash = "#section";
+
+  assert_equals(url.href, "https://example.com/new-path?key=val#section",
+    "href should reflect updated components");
+}, "URL: component setters update href");
+
+test(function () {
+  var base = new URL("https://example.com/base/page");
+  var resolved = new URL("../other", base);
+  assert_equals(resolved.pathname, "/other",
+    "Relative URL should resolve against base");
+}, "URL: relative URL resolution with base");
+
+test(function () {
+  assert_throws_js(TypeError, function () {
+    new URL("not a valid url");
+  }, "Invalid URL should throw TypeError");
+}, "URL: constructor throws for invalid URL");
+
+// =============================================================
+// 2. URLSearchParams
+// Covers: url/urlsearchparams-constructor.any.js
+//         url/urlsearchparams-append.any.js
+//         url/urlsearchparams-get.any.js
+//         url/urlsearchparams-has.any.js
+//         url/urlsearchparams-sort.any.js
+// =============================================================
+
+test(function () {
+  var params = new URLSearchParams("a=1&b=2&a=3");
+  assert_equals(params.get("a"), "1",
+    "get should return first value");
+  assert_array_equals(params.getAll("a"), ["1", "3"],
+    "getAll should return all values");
+  assert_true(params.has("b"), "has should return true for 'b'");
+  assert_equals(params.get("b"), "2",
+    "get should return value for 'b'");
+}, "URLSearchParams: constructor from string, get, getAll, has");
+
+test(function () {
+  var params = new URLSearchParams();
+  params.append("x", "1");
+  params.append("y", "2");
+  params.append("x", "3");
+
+  assert_equals(params.toString(), "x=1&y=2&x=3",
+    "toString should serialize all entries");
+
+  params.set("x", "only");
+  assert_equals(params.getAll("x").length, 1,
+    "set should replace all values for key");
+
+  params.delete("y");
+  assert_false(params.has("y"),
+    "delete should remove key");
+  assert_equals(params.toString(), "x=only",
+    "toString should reflect deletions");
+}, "URLSearchParams: append, set, delete, toString");
+
+test(function () {
+  var params = new URLSearchParams("z=1&a=2&m=3");
+  params.sort();
+  assert_equals(params.toString(), "a=2&m=3&z=1",
+    "sort should order keys alphabetically");
+}, "URLSearchParams: sort orders by key name");
+
+test(function () {
+  var url = new URL("https://example.com/?foo=bar");
+  url.searchParams.append("baz", "qux");
+  assert_equals(url.search, "?foo=bar&baz=qux",
+    "Appending to searchParams should update URL search");
+  assert_equals(url.searchParams.get("foo"), "bar",
+    "searchParams should reflect original params");
+}, "URLSearchParams: integrated with URL object");
+
+// =============================================================
+// 3. Encoding — TextEncoder / TextDecoder
+// Covers: encoding/textencoder-*.any.js
+//         encoding/textdecoder-*.any.js
+//         encoding/api-basics.any.js
+// =============================================================
+
+test(function () {
+  var encoder = new TextEncoder();
+  assert_equals(encoder.encoding, "utf-8",
+    "TextEncoder encoding should be 'utf-8'");
+  var encoded = encoder.encode("Hello");
+  assert_true(encoded instanceof Uint8Array,
+    "encode should return a Uint8Array");
+  assert_equals(encoded.length, 5,
+    "Encoded 'Hello' should be 5 bytes");
+  assert_equals(encoded[0], 72, "First byte should be 72 (H)");
+  assert_equals(encoded[4], 111, "Last byte should be 111 (o)");
+}, "Encoding: TextEncoder encodes ASCII string to UTF-8");
+
+test(function () {
+  var encoder = new TextEncoder();
+  var encoded = encoder.encode("\u00E9");  // é
+  assert_equals(encoded.length, 2,
+    "UTF-8 encoding of U+00E9 should be 2 bytes");
+  assert_equals(encoded[0], 0xC3, "First byte should be 0xC3");
+  assert_equals(encoded[1], 0xA9, "Second byte should be 0xA9");
+}, "Encoding: TextEncoder encodes multi-byte character");
+
+test(function () {
+  var decoder = new TextDecoder("utf-8");
+  assert_equals(decoder.encoding, "utf-8",
+    "TextDecoder encoding should be 'utf-8'");
+  var bytes = new Uint8Array([72, 101, 108, 108, 111]);
+  var decoded = decoder.decode(bytes);
+  assert_equals(decoded, "Hello",
+    "TextDecoder should decode UTF-8 bytes to 'Hello'");
+}, "Encoding: TextDecoder decodes UTF-8 bytes to string");
+
+test(function () {
+  var encoder = new TextEncoder();
+  var decoder = new TextDecoder("utf-8");
+  var original = "Hello, \u4E16\u754C!";  // Hello, 世界!
+  var roundtrip = decoder.decode(encoder.encode(original));
+  assert_equals(roundtrip, original,
+    "Round-trip encode/decode should preserve string");
+}, "Encoding: TextEncoder/TextDecoder round-trip preserves content");
+
+test(function () {
+  var decoder = new TextDecoder("utf-8", { fatal: true });
+  assert_throws_js(TypeError, function () {
+    decoder.decode(new Uint8Array([0xFF, 0xFE]));
+  }, "Fatal decoder should throw on invalid UTF-8");
+}, "Encoding: TextDecoder fatal mode throws on invalid bytes");
+
+// =============================================================
+// 4. Fetch API — Headers
+// Covers: fetch/api/headers/
+// =============================================================
+
+test(function () {
+  var headers = new Headers();
+  headers.append("Content-Type", "text/html");
+  headers.append("X-Custom", "value1");
+
+  assert_equals(headers.get("Content-Type"), "text/html",
+    "get should return 'text/html'");
+  assert_true(headers.has("X-Custom"),
+    "has should return true for 'X-Custom'");
+
+  headers.set("X-Custom", "value2");
+  assert_equals(headers.get("X-Custom"), "value2",
+    "set should replace value");
+
+  headers.delete("X-Custom");
+  assert_false(headers.has("X-Custom"),
+    "delete should remove header");
+}, "Fetch: Headers append, get, set, delete, has");
+
+test(function () {
+  var headers = new Headers({
+    "Accept": "application/json",
+    "Authorization": "Bearer token"
+  });
+  assert_equals(headers.get("Accept"), "application/json",
+    "Constructor with object should set headers");
+  assert_equals(headers.get("Authorization"), "Bearer token",
+    "Authorization header should be set");
+}, "Fetch: Headers constructor with object initializer");
+
+test(function () {
+  var headers = new Headers();
+  headers.append("X-Multi", "a");
+  headers.append("X-Multi", "b");
+  assert_equals(headers.get("X-Multi"), "a, b",
+    "Multiple values should be combined with comma");
+}, "Fetch: Headers combines multiple values for same key");
+
+// =============================================================
+// 5. Fetch API — Request
+// Covers: fetch/api/request/
+// =============================================================
+
+test(function () {
+  var request = new Request("https://example.com/api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  assert_equals(request.method, "POST", "method should be 'POST'");
+  assert_equals(request.url, "https://example.com/api",
+    "url should be the full URL");
+  assert_equals(request.headers.get("Content-Type"), "application/json",
+    "Content-Type header should be set");
+  assert_equals(request.credentials, "same-origin",
+    "Default credentials should be 'same-origin'");
+}, "Fetch: Request constructor with method and headers");
+
+test(function () {
+  var request = new Request("https://example.com/");
+  assert_equals(request.method, "GET", "Default method should be 'GET'");
+  assert_equals(request.mode, "cors", "Default mode should be 'cors'");
+}, "Fetch: Request default properties");
+
+test(function () {
+  var original = new Request("https://example.com/", {
+    method: "POST",
+    headers: { "X-Test": "original" }
+  });
+  var cloned = original.clone();
+  assert_equals(cloned.method, "POST",
+    "Cloned method should match original");
+  assert_equals(cloned.url, original.url,
+    "Cloned URL should match original");
+  assert_equals(cloned.headers.get("X-Test"), "original",
+    "Cloned headers should match original");
+}, "Fetch: Request clone preserves properties");
+
+// =============================================================
+// 6. Fetch API — Response
+// Covers: fetch/api/response/
+// =============================================================
+
+test(function () {
+  var response = new Response("body content", {
+    status: 200,
+    statusText: "OK",
+    headers: { "Content-Type": "text/plain" }
+  });
+  assert_equals(response.status, 200, "status should be 200");
+  assert_equals(response.statusText, "OK", "statusText should be 'OK'");
+  assert_true(response.ok, "ok should be true for 2xx status");
+  assert_equals(response.headers.get("Content-Type"), "text/plain",
+    "Content-Type should be set");
+}, "Fetch: Response constructor with status and headers");
+
+test(function () {
+  var response = new Response(null, { status: 404, statusText: "Not Found" });
+  assert_equals(response.status, 404, "status should be 404");
+  assert_false(response.ok, "ok should be false for 4xx status");
+}, "Fetch: Response with non-ok status");
+
+test(function () {
+  var redirect = Response.redirect("https://example.com/other", 302);
+  assert_equals(redirect.status, 302, "Redirect status should be 302");
+  assert_true(redirect.headers.has("Location"),
+    "Redirect should have Location header");
+}, "Fetch: Response.redirect creates redirect response");
+
+promise_test(function () {
+  var response = new Response('{"key":"value"}', {
+    headers: { "Content-Type": "application/json" }
+  });
+  return response.json().then(function (data) {
+    assert_equals(data.key, "value",
+      "json() should parse response body");
+  });
+}, "Fetch: Response.json() parses JSON body");
+
+promise_test(function () {
+  var response = new Response("plain text");
+  return response.text().then(function (text) {
+    assert_equals(text, "plain text",
+      "text() should return body as string");
+  });
+}, "Fetch: Response.text() returns body string");
+
+// =============================================================
+// 7. Web Storage — localStorage
+// Covers: webstorage/storage_*.html
+// =============================================================
+
+test(function () {
+  localStorage.clear();
+  assert_equals(localStorage.length, 0,
+    "localStorage should be empty after clear");
+
+  localStorage.setItem("key1", "value1");
+  assert_equals(localStorage.length, 1,
+    "length should be 1 after setItem");
+  assert_equals(localStorage.getItem("key1"), "value1",
+    "getItem should return stored value");
+
+  localStorage.setItem("key2", "value2");
+  assert_equals(localStorage.length, 2,
+    "length should be 2 after second setItem");
+
+  localStorage.removeItem("key1");
+  assert_equals(localStorage.length, 1,
+    "length should be 1 after removeItem");
+  assert_equals(localStorage.getItem("key1"), null,
+    "Removed item should return null");
+
+  localStorage.clear();
+  assert_equals(localStorage.length, 0,
+    "length should be 0 after clear");
+}, "Storage: localStorage setItem, getItem, removeItem, clear");
+
+test(function () {
+  localStorage.clear();
+  localStorage.setItem("a", "1");
+  localStorage.setItem("b", "2");
+
+  assert_equals(localStorage.key(0) !== null, true,
+    "key(0) should return a key name");
+  var keys = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    keys.push(localStorage.key(i));
+  }
+  assert_true(keys.indexOf("a") !== -1, "keys should include 'a'");
+  assert_true(keys.indexOf("b") !== -1, "keys should include 'b'");
+  localStorage.clear();
+}, "Storage: localStorage key enumeration");
+
+// =============================================================
+// 8. Web Storage — sessionStorage
+// Covers: webstorage/storage_*.html
+// =============================================================
+
+test(function () {
+  sessionStorage.clear();
+  assert_equals(sessionStorage.length, 0,
+    "sessionStorage should be empty after clear");
+
+  sessionStorage.setItem("sess1", "val1");
+  assert_equals(sessionStorage.getItem("sess1"), "val1",
+    "getItem should return stored value");
+  assert_equals(sessionStorage.length, 1,
+    "length should be 1");
+
+  sessionStorage.removeItem("sess1");
+  assert_equals(sessionStorage.getItem("sess1"), null,
+    "Removed item should return null");
+  sessionStorage.clear();
+}, "Storage: sessionStorage setItem, getItem, removeItem");
+
+// =============================================================
+// 9. Streams — ReadableStream
+// Covers: streams/readable-streams/
+// =============================================================
+
+test(function () {
+  var stream = new ReadableStream();
+  assert_true(stream instanceof ReadableStream,
+    "Should be a ReadableStream instance");
+  assert_false(stream.locked,
+    "New stream should not be locked");
+}, "Streams: ReadableStream constructor and initial state");
+
+promise_test(function () {
+  var stream = new ReadableStream({
+    start: function (controller) {
+      controller.enqueue("chunk1");
+      controller.enqueue("chunk2");
+      controller.close();
+    }
+  });
+
+  var reader = stream.getReader();
+  var results = [];
+
+  function read() {
+    return reader.read().then(function (result) {
+      if (result.done) return results;
+      results.push(result.value);
+      return read();
+    });
+  }
+
+  return read().then(function (data) {
+    assert_array_equals(data, ["chunk1", "chunk2"],
+      "Reader should receive all enqueued chunks");
+  });
+}, "Streams: ReadableStream enqueue and read chunks");
+
+test(function () {
+  var stream = new ReadableStream();
+  var reader = stream.getReader();
+  assert_true(stream.locked,
+    "Stream should be locked after getReader()");
+  reader.releaseLock();
+  assert_false(stream.locked,
+    "Stream should be unlocked after releaseLock()");
+}, "Streams: ReadableStream lock and releaseLock");
+
+// =============================================================
+// 10. Streams — WritableStream
+// Covers: streams/writable-streams/
+// =============================================================
+
+test(function () {
+  var stream = new WritableStream();
+  assert_true(stream instanceof WritableStream,
+    "Should be a WritableStream instance");
+  assert_false(stream.locked,
+    "New stream should not be locked");
+}, "Streams: WritableStream constructor and initial state");
+
+promise_test(function () {
+  var written = [];
+  var stream = new WritableStream({
+    write: function (chunk) {
+      written.push(chunk);
+    }
+  });
+  var writer = stream.getWriter();
+  return writer.write("a").then(function () {
+    return writer.write("b");
+  }).then(function () {
+    return writer.close();
+  }).then(function () {
+    assert_array_equals(written, ["a", "b"],
+      "Chunks should be written in order");
+  });
+}, "Streams: WritableStream write and close");
+
+// =============================================================
+// 11. Streams — TransformStream
+// Covers: streams/transform-streams/
+// =============================================================
+
+promise_test(function () {
+  var transform = new TransformStream({
+    transform: function (chunk, controller) {
+      controller.enqueue(chunk.toUpperCase());
+    }
+  });
+
+  var writer = transform.writable.getWriter();
+  var reader = transform.readable.getReader();
+
+  writer.write("hello");
+  writer.close();
+
+  var results = [];
+  function read() {
+    return reader.read().then(function (result) {
+      if (result.done) return results;
+      results.push(result.value);
+      return read();
+    });
+  }
+
+  return read().then(function (data) {
+    assert_array_equals(data, ["HELLO"],
+      "TransformStream should transform chunks");
+  });
+}, "Streams: TransformStream transforms data");
+
+// =============================================================
+// 12. Integration: Encode string, create Response, read via Stream
+// Cross-feature test
+// =============================================================
+
+promise_test(function () {
+  // Encode a string to bytes using TextEncoder
+  var encoder = new TextEncoder();
+  var bytes = encoder.encode("Integrated Test");
+
+  // Create a Response from the bytes
+  var response = new Response(bytes, {
+    headers: { "Content-Type": "text/plain" }
+  });
+
+  // Read the Response body as text
+  return response.text().then(function (text) {
+    assert_equals(text, "Integrated Test",
+      "Response created from encoded bytes should decode correctly");
+  });
+}, "Integration: TextEncoder bytes to Response to text round-trip");
+
+promise_test(function () {
+  // Build a URL with search params
+  var url = new URL("https://example.com/api");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("query", "test");
+
+  // Create a Request from the URL
+  var request = new Request(url.href, {
+    method: "GET",
+    headers: new Headers({ "Accept": "application/json" })
+  });
+
+  assert_equals(request.url, "https://example.com/api?format=json&query=test",
+    "Request URL should include search params");
+  assert_equals(request.headers.get("Accept"), "application/json",
+    "Request should have Accept header");
+
+  // Create a mock Response
+  var body = JSON.stringify({ result: "success" });
+  var response = new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+
+  return response.json().then(function (data) {
+    assert_equals(data.result, "success",
+      "Mock response JSON should parse correctly");
+  });
+}, "Integration: URL + Request + Response + JSON parsing");
+</script>

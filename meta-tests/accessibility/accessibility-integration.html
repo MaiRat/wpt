@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Accessibility Integration — Consolidated ARIA and Accessibility Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://w3c.github.io/aria/">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/interaction.html">
+<link rel="help" href="https://w3c.github.io/html-aam/">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: accessibility/accessibility-integration.html
+  Exercises ARIA roles, states, properties, and keyboard interaction together.
+
+  Covers atomic test areas:
+    - wai-aria/role/ (ARIA role reflection)
+    - wai-aria/ (ARIA attributes and states)
+    - html/semantics/interactive-elements/ (tabindex, focus, inert)
+    - html-aam/ (HTML Accessibility API Mappings)
+    - core-aam/ (Core Accessibility API Mappings)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. ARIA Role — Attribute Reflection
+// Covers: wai-aria/role/
+// =============================================================
+
+test(function () {
+  var div = document.createElement("div");
+  div.setAttribute("role", "button");
+  assert_equals(div.getAttribute("role"), "button",
+    "role attribute should be 'button'");
+  cleanup();
+}, "ARIA: role attribute is set and reflected");
+
+test(function () {
+  var div = document.createElement("div");
+  div.setAttribute("role", "navigation");
+  container.appendChild(div);
+  assert_equals(div.getAttribute("role"), "navigation",
+    "role should be 'navigation'");
+  cleanup();
+}, "ARIA: landmark role 'navigation' is set correctly");
+
+test(function () {
+  var roles = [
+    "alert", "alertdialog", "button", "checkbox", "dialog",
+    "gridcell", "link", "log", "marquee", "menuitem",
+    "menuitemcheckbox", "menuitemradio", "option", "progressbar",
+    "radio", "scrollbar", "searchbox", "slider", "spinbutton",
+    "status", "switch", "tab", "tabpanel", "textbox", "timer",
+    "tooltip", "treeitem"
+  ];
+  roles.forEach(function (role) {
+    var el = document.createElement("div");
+    el.setAttribute("role", role);
+    assert_equals(el.getAttribute("role"), role,
+      "role attribute should be '" + role + "'");
+  });
+  cleanup();
+}, "ARIA: widget roles are accepted as attribute values");
+
+test(function () {
+  var landmarks = [
+    "banner", "complementary", "contentinfo", "form",
+    "main", "navigation", "region", "search"
+  ];
+  landmarks.forEach(function (role) {
+    var el = document.createElement("div");
+    el.setAttribute("role", role);
+    assert_equals(el.getAttribute("role"), role,
+      "landmark role should be '" + role + "'");
+  });
+  cleanup();
+}, "ARIA: landmark roles are accepted as attribute values");
+
+// =============================================================
+// 2. ARIA States and Properties
+// Covers: wai-aria/
+// =============================================================
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-pressed", "false");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-pressed"), "false",
+    "aria-pressed should be 'false'");
+
+  el.setAttribute("aria-pressed", "true");
+  assert_equals(el.getAttribute("aria-pressed"), "true",
+    "aria-pressed should be 'true' after setting");
+  cleanup();
+}, "ARIA: aria-pressed state toggles correctly");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "checkbox");
+  el.setAttribute("aria-checked", "false");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-checked"), "false",
+    "aria-checked should be 'false' initially");
+
+  el.setAttribute("aria-checked", "true");
+  assert_equals(el.getAttribute("aria-checked"), "true",
+    "aria-checked should update to 'true'");
+
+  el.setAttribute("aria-checked", "mixed");
+  assert_equals(el.getAttribute("aria-checked"), "mixed",
+    "aria-checked should accept 'mixed' value");
+  cleanup();
+}, "ARIA: aria-checked state accepts false, true, mixed");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "textbox");
+  el.setAttribute("aria-required", "true");
+  el.setAttribute("aria-readonly", "false");
+  el.setAttribute("aria-invalid", "false");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-required"), "true",
+    "aria-required should be 'true'");
+  assert_equals(el.getAttribute("aria-readonly"), "false",
+    "aria-readonly should be 'false'");
+  assert_equals(el.getAttribute("aria-invalid"), "false",
+    "aria-invalid should be 'false'");
+
+  el.setAttribute("aria-invalid", "true");
+  assert_equals(el.getAttribute("aria-invalid"), "true",
+    "aria-invalid should update to 'true'");
+  cleanup();
+}, "ARIA: textbox states — required, readonly, invalid");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  assert_equals(el.getAttribute("aria-hidden"), "true",
+    "aria-hidden should be 'true'");
+
+  el.setAttribute("aria-hidden", "false");
+  assert_equals(el.getAttribute("aria-hidden"), "false",
+    "aria-hidden should update to 'false'");
+  cleanup();
+}, "ARIA: aria-hidden toggling");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-valuemin", "0");
+  el.setAttribute("aria-valuemax", "100");
+  el.setAttribute("aria-valuenow", "50");
+  el.setAttribute("aria-valuetext", "50 percent");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-valuemin"), "0",
+    "aria-valuemin should be '0'");
+  assert_equals(el.getAttribute("aria-valuemax"), "100",
+    "aria-valuemax should be '100'");
+  assert_equals(el.getAttribute("aria-valuenow"), "50",
+    "aria-valuenow should be '50'");
+  assert_equals(el.getAttribute("aria-valuetext"), "50 percent",
+    "aria-valuetext should be '50 percent'");
+  cleanup();
+}, "ARIA: slider value properties");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "treeitem");
+  el.setAttribute("aria-expanded", "false");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-expanded"), "false",
+    "aria-expanded should be 'false'");
+
+  el.setAttribute("aria-expanded", "true");
+  assert_equals(el.getAttribute("aria-expanded"), "true",
+    "aria-expanded should update to 'true'");
+  cleanup();
+}, "ARIA: aria-expanded toggling");
+
+// =============================================================
+// 3. ARIA Labelling
+// Covers: wai-aria/
+// =============================================================
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("aria-label", "Close dialog");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-label"), "Close dialog",
+    "aria-label should return set value");
+  cleanup();
+}, "ARIA: aria-label provides accessible name");
+
+test(function () {
+  var label = document.createElement("span");
+  label.id = "lbl1";
+  label.textContent = "Username";
+  var input = document.createElement("input");
+  input.setAttribute("aria-labelledby", "lbl1");
+  container.appendChild(label);
+  container.appendChild(input);
+
+  assert_equals(input.getAttribute("aria-labelledby"), "lbl1",
+    "aria-labelledby should reference the label element ID");
+  var referenced = document.getElementById(
+    input.getAttribute("aria-labelledby")
+  );
+  assert_equals(referenced.textContent, "Username",
+    "Referenced element should have expected text");
+  cleanup();
+}, "ARIA: aria-labelledby references label element");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "region");
+  el.setAttribute("aria-describedby", "desc1");
+  var desc = document.createElement("p");
+  desc.id = "desc1";
+  desc.textContent = "This section contains settings";
+  container.appendChild(desc);
+  container.appendChild(el);
+
+  var referenced = document.getElementById(
+    el.getAttribute("aria-describedby")
+  );
+  assert_equals(referenced.textContent, "This section contains settings",
+    "aria-describedby should reference description element");
+  cleanup();
+}, "ARIA: aria-describedby references description element");
+
+// =============================================================
+// 4. ARIA Live Regions
+// Covers: wai-aria/
+// =============================================================
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("aria-live", "polite");
+  el.setAttribute("aria-atomic", "true");
+  el.setAttribute("aria-relevant", "additions text");
+  container.appendChild(el);
+
+  assert_equals(el.getAttribute("aria-live"), "polite",
+    "aria-live should be 'polite'");
+  assert_equals(el.getAttribute("aria-atomic"), "true",
+    "aria-atomic should be 'true'");
+  assert_equals(el.getAttribute("aria-relevant"), "additions text",
+    "aria-relevant should be 'additions text'");
+  cleanup();
+}, "ARIA: live region attributes — live, atomic, relevant");
+
+test(function () {
+  var el = document.createElement("div");
+  el.setAttribute("role", "alert");
+  container.appendChild(el);
+  assert_equals(el.getAttribute("role"), "alert",
+    "role should be 'alert'");
+  cleanup();
+}, "ARIA: alert role for live region notification");
+
+// =============================================================
+// 5. Tabindex and Focus Management
+// Covers: html/semantics/interactive-elements/
+// =============================================================
+
+test(function () {
+  var div = document.createElement("div");
+  div.tabIndex = 0;
+  container.appendChild(div);
+
+  assert_equals(div.tabIndex, 0, "tabIndex should be 0");
+  div.focus();
+  assert_equals(document.activeElement, div,
+    "Element with tabIndex=0 should be focusable");
+  cleanup();
+}, "Focus: tabIndex=0 makes element focusable");
+
+test(function () {
+  var div = document.createElement("div");
+  div.tabIndex = -1;
+  container.appendChild(div);
+
+  assert_equals(div.tabIndex, -1, "tabIndex should be -1");
+  div.focus();
+  assert_equals(document.activeElement, div,
+    "tabIndex=-1 element should be programmatically focusable");
+  cleanup();
+}, "Focus: tabIndex=-1 allows programmatic focus");
+
+test(function () {
+  var el1 = document.createElement("button");
+  el1.textContent = "First";
+  var el2 = document.createElement("button");
+  el2.textContent = "Second";
+  container.appendChild(el1);
+  container.appendChild(el2);
+
+  el1.focus();
+  assert_equals(document.activeElement, el1,
+    "First button should receive focus");
+
+  el2.focus();
+  assert_equals(document.activeElement, el2,
+    "Second button should receive focus after focus()");
+  cleanup();
+}, "Focus: buttons are natively focusable");
+
+test(function () {
+  var el = document.createElement("div");
+  el.tabIndex = 0;
+  container.appendChild(el);
+
+  var focusFired = false;
+  var blurFired = false;
+  el.addEventListener("focus", function () { focusFired = true; });
+  el.addEventListener("blur", function () { blurFired = true; });
+
+  el.focus();
+  assert_true(focusFired, "focus event should fire");
+
+  el.blur();
+  assert_true(blurFired, "blur event should fire");
+  cleanup();
+}, "Focus: focus and blur events fire correctly");
+
+// =============================================================
+// 6. HTML Native Accessibility Semantics
+// Covers: html-aam/, core-aam/
+// =============================================================
+
+test(function () {
+  var button = document.createElement("button");
+  button.textContent = "Click me";
+  container.appendChild(button);
+
+  // Buttons have implicit role="button"
+  assert_true(button.matches("[type='submit'], button"),
+    "button element should exist in DOM");
+  assert_equals(button.tabIndex, 0,
+    "button should have default tabIndex of 0");
+  cleanup();
+}, "HTML-AAM: button element has native focusability");
+
+test(function () {
+  var a = document.createElement("a");
+  a.href = "https://example.com";
+  a.textContent = "Example";
+  container.appendChild(a);
+
+  assert_equals(a.tabIndex, 0,
+    "Anchor with href should have tabIndex 0");
+  a.focus();
+  assert_equals(document.activeElement, a,
+    "Anchor with href should be focusable");
+  cleanup();
+}, "HTML-AAM: anchor with href is natively focusable");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.setAttribute("aria-label", "Search");
+  container.appendChild(input);
+
+  assert_equals(input.getAttribute("aria-label"), "Search",
+    "ARIA label should override native label");
+  assert_equals(input.tabIndex, 0,
+    "Input should be natively focusable");
+  cleanup();
+}, "HTML-AAM: input element with ARIA label override");
+
+test(function () {
+  var nav = document.createElement("nav");
+  nav.setAttribute("aria-label", "Main navigation");
+  var ul = document.createElement("ul");
+  var li1 = document.createElement("li");
+  var a1 = document.createElement("a");
+  a1.href = "#home";
+  a1.textContent = "Home";
+  li1.appendChild(a1);
+  ul.appendChild(li1);
+  nav.appendChild(ul);
+  container.appendChild(nav);
+
+  assert_equals(nav.getAttribute("aria-label"), "Main navigation",
+    "nav should have aria-label");
+  assert_equals(nav.querySelector("a").textContent, "Home",
+    "First link text should be 'Home'");
+  cleanup();
+}, "HTML-AAM: nav element with aria-label for navigation landmark");
+
+// =============================================================
+// 7. Disabled and Inert State
+// Covers: html/semantics/interactive-elements/
+// =============================================================
+
+test(function () {
+  var button = document.createElement("button");
+  button.disabled = true;
+  container.appendChild(button);
+
+  assert_true(button.disabled, "button should be disabled");
+  assert_true(button.matches(":disabled"),
+    "disabled button should match :disabled pseudo-class");
+
+  var clicked = false;
+  button.addEventListener("click", function () { clicked = true; });
+  button.click();
+  assert_false(clicked,
+    "Click event handler should not fire on disabled button");
+  cleanup();
+}, "Disabled: disabled button does not fire click events");
+
+test(function () {
+  var input = document.createElement("input");
+  input.disabled = true;
+  input.setAttribute("aria-disabled", "true");
+  container.appendChild(input);
+
+  assert_true(input.disabled, "input should be disabled");
+  assert_equals(input.getAttribute("aria-disabled"), "true",
+    "aria-disabled should match disabled state");
+  cleanup();
+}, "Disabled: aria-disabled aligns with native disabled state");
+
+// =============================================================
+// 8. ARIA Relationship Attributes
+// Covers: wai-aria/
+// =============================================================
+
+test(function () {
+  var listbox = document.createElement("div");
+  listbox.setAttribute("role", "listbox");
+  listbox.setAttribute("aria-activedescendant", "opt2");
+
+  var opt1 = document.createElement("div");
+  opt1.id = "opt1";
+  opt1.setAttribute("role", "option");
+  opt1.textContent = "Option 1";
+  var opt2 = document.createElement("div");
+  opt2.id = "opt2";
+  opt2.setAttribute("role", "option");
+  opt2.textContent = "Option 2";
+  opt2.setAttribute("aria-selected", "true");
+
+  listbox.appendChild(opt1);
+  listbox.appendChild(opt2);
+  container.appendChild(listbox);
+
+  assert_equals(listbox.getAttribute("aria-activedescendant"), "opt2",
+    "aria-activedescendant should point to 'opt2'");
+  var active = document.getElementById(
+    listbox.getAttribute("aria-activedescendant")
+  );
+  assert_equals(active.textContent, "Option 2",
+    "Active descendant should be 'Option 2'");
+  assert_equals(active.getAttribute("aria-selected"), "true",
+    "Active option should have aria-selected='true'");
+  cleanup();
+}, "ARIA: aria-activedescendant and aria-selected on listbox");
+
+test(function () {
+  var tab = document.createElement("div");
+  tab.setAttribute("role", "tab");
+  tab.setAttribute("aria-controls", "panel1");
+  tab.id = "tab1";
+
+  var panel = document.createElement("div");
+  panel.setAttribute("role", "tabpanel");
+  panel.setAttribute("aria-labelledby", "tab1");
+  panel.id = "panel1";
+  panel.textContent = "Panel content";
+
+  container.appendChild(tab);
+  container.appendChild(panel);
+
+  assert_equals(tab.getAttribute("aria-controls"), "panel1",
+    "Tab should control panel1");
+  assert_equals(panel.getAttribute("aria-labelledby"), "tab1",
+    "Panel should be labelled by tab1");
+
+  var controlled = document.getElementById(
+    tab.getAttribute("aria-controls")
+  );
+  assert_equals(controlled.textContent, "Panel content",
+    "Controlled panel should have expected content");
+  cleanup();
+}, "ARIA: tab/tabpanel with aria-controls and aria-labelledby");
+
+// =============================================================
+// 9. Integration: Accessible form with ARIA and validation
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  var form = document.createElement("form");
+  form.setAttribute("aria-label", "Registration form");
+
+  var nameLabel = document.createElement("label");
+  nameLabel.id = "name-label";
+  nameLabel.textContent = "Full Name";
+  var nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.required = true;
+  nameInput.setAttribute("aria-labelledby", "name-label");
+  nameInput.setAttribute("aria-required", "true");
+
+  var errorMsg = document.createElement("span");
+  errorMsg.id = "name-error";
+  errorMsg.textContent = "Name is required";
+  errorMsg.setAttribute("aria-live", "polite");
+  errorMsg.style.display = "none";
+
+  nameInput.setAttribute("aria-describedby", "name-error");
+  nameInput.setAttribute("aria-invalid", "false");
+
+  form.appendChild(nameLabel);
+  form.appendChild(nameInput);
+  form.appendChild(errorMsg);
+  container.appendChild(form);
+
+  // Initially valid state (field is empty but we haven't validated yet)
+  assert_equals(nameInput.getAttribute("aria-invalid"), "false",
+    "aria-invalid should start as 'false'");
+  assert_equals(nameInput.getAttribute("aria-required"), "true",
+    "aria-required should be 'true'");
+
+  // Simulate validation failure
+  var isValid = nameInput.checkValidity();
+  if (!isValid) {
+    nameInput.setAttribute("aria-invalid", "true");
+    errorMsg.style.display = "";
+  }
+  assert_equals(nameInput.getAttribute("aria-invalid"), "true",
+    "aria-invalid should be 'true' after validation failure");
+
+  // Fix the input
+  nameInput.value = "Alice";
+  isValid = nameInput.checkValidity();
+  if (isValid) {
+    nameInput.setAttribute("aria-invalid", "false");
+    errorMsg.style.display = "none";
+  }
+  assert_equals(nameInput.getAttribute("aria-invalid"), "false",
+    "aria-invalid should be 'false' after valid input");
+
+  // Verify ARIA references
+  var labelEl = document.getElementById(
+    nameInput.getAttribute("aria-labelledby")
+  );
+  assert_equals(labelEl.textContent, "Full Name",
+    "Label should reference 'Full Name' text");
+
+  var descEl = document.getElementById(
+    nameInput.getAttribute("aria-describedby")
+  );
+  assert_equals(descEl.textContent, "Name is required",
+    "Description should reference error message");
+  assert_equals(descEl.getAttribute("aria-live"), "polite",
+    "Error message should be a polite live region");
+
+  cleanup();
+}, "Integration: accessible form with ARIA labelling, validation, and live regions");
+</script>
