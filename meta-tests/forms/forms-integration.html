@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Forms Integration — Consolidated HTML Forms Test</title>
+<link rel="author" title="Web Platform Tests" href="https://github.com/nicbarker/wpt">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/forms.html">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/form-elements.html">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/input.html">
+<link rel="help" href="https://html.spec.whatwg.org/multipage/form-control-infrastructure.html">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<!--
+  Meta-test: forms/forms-integration.html
+  Exercises HTML form elements, input types, constraint validation, and form
+  submission mechanics together in a single integrated page.
+
+  Covers atomic test areas:
+    - html/semantics/forms/the-input-element/ (input types, attributes, states)
+    - html/semantics/forms/the-form-element/ (form element, named access)
+    - html/semantics/forms/the-button-element/ (button types, submission)
+    - html/semantics/forms/the-select-element/ (select/option behavior)
+    - html/semantics/forms/the-textarea-element/ (textarea value, wrapping)
+    - html/semantics/forms/the-fieldset-element/ (fieldset/legend grouping)
+    - html/semantics/forms/the-output-element/ (output default value)
+    - html/semantics/forms/constraints/ (constraint validation API)
+-->
+
+<div id="log"></div>
+<div id="test-container"></div>
+
+<script>
+"use strict";
+
+var container = document.getElementById("test-container");
+
+function cleanup() {
+  container.innerHTML = "";
+}
+
+// =============================================================
+// 1. Form Element — Creation and Properties
+// Covers: html/semantics/forms/the-form-element/
+// =============================================================
+
+test(function () {
+  var form = document.createElement("form");
+  assert_true(form instanceof HTMLFormElement,
+    "Should be an HTMLFormElement");
+  assert_equals(form.elements.length, 0,
+    "New form should have no elements");
+  assert_equals(form.method, "get",
+    "Default method should be 'get'");
+  assert_equals(form.enctype, "application/x-www-form-urlencoded",
+    "Default enctype should be 'application/x-www-form-urlencoded'");
+  cleanup();
+}, "Form: element creation and default properties");
+
+test(function () {
+  var form = document.createElement("form");
+  form.method = "post";
+  form.action = "/submit";
+  form.enctype = "multipart/form-data";
+
+  assert_equals(form.method, "post", "method should be 'post'");
+  assert_true(form.action.indexOf("/submit") !== -1,
+    "action should contain '/submit'");
+  assert_equals(form.enctype, "multipart/form-data",
+    "enctype should be 'multipart/form-data'");
+  cleanup();
+}, "Form: setting method, action, and enctype attributes");
+
+test(function () {
+  var form = document.createElement("form");
+  container.appendChild(form);
+  var input1 = document.createElement("input");
+  input1.name = "username";
+  var input2 = document.createElement("input");
+  input2.name = "password";
+  input2.type = "password";
+  form.appendChild(input1);
+  form.appendChild(input2);
+
+  assert_equals(form.elements.length, 2,
+    "form.elements should have 2 elements");
+  assert_equals(form.elements[0].name, "username",
+    "First element should be 'username'");
+  assert_equals(form.elements.namedItem("password"), input2,
+    "namedItem should find the password input");
+  cleanup();
+}, "Form: elements collection and namedItem access");
+
+// =============================================================
+// 2. Input Element — Types and Properties
+// Covers: html/semantics/forms/the-input-element/
+// =============================================================
+
+test(function () {
+  var input = document.createElement("input");
+  assert_true(input instanceof HTMLInputElement,
+    "Should be an HTMLInputElement");
+  assert_equals(input.type, "text",
+    "Default type should be 'text'");
+  assert_equals(input.value, "",
+    "Default value should be empty string");
+  cleanup();
+}, "Input: default type and value");
+
+test(function () {
+  var types = [
+    "text", "password", "checkbox", "radio", "submit",
+    "reset", "button", "hidden", "number", "range",
+    "email", "url", "tel", "search", "color"
+  ];
+  types.forEach(function (type) {
+    var input = document.createElement("input");
+    input.type = type;
+    assert_equals(input.type, type,
+      "Input type should be '" + type + "'");
+  });
+  cleanup();
+}, "Input: all standard types are accepted");
+
+test(function () {
+  var checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  assert_false(checkbox.checked, "Checkbox should be unchecked initially");
+
+  checkbox.checked = true;
+  assert_true(checkbox.checked, "Checkbox should be checked after setting");
+
+  checkbox.checked = false;
+  assert_false(checkbox.checked, "Checkbox should be unchecked after clearing");
+  cleanup();
+}, "Input: checkbox checked property toggles");
+
+test(function () {
+  var form = document.createElement("form");
+  container.appendChild(form);
+
+  var r1 = document.createElement("input");
+  r1.type = "radio";
+  r1.name = "group";
+  r1.value = "a";
+  var r2 = document.createElement("input");
+  r2.type = "radio";
+  r2.name = "group";
+  r2.value = "b";
+  form.appendChild(r1);
+  form.appendChild(r2);
+
+  r1.checked = true;
+  assert_true(r1.checked, "First radio should be checked");
+  assert_false(r2.checked, "Second radio should not be checked");
+
+  r2.checked = true;
+  assert_false(r1.checked, "First radio should be unchecked after selecting second");
+  assert_true(r2.checked, "Second radio should be checked");
+  cleanup();
+}, "Input: radio buttons in same group are mutually exclusive");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.max = "100";
+  input.step = "5";
+  input.value = "10";
+
+  assert_equals(input.min, "0", "min should be '0'");
+  assert_equals(input.max, "100", "max should be '100'");
+  assert_equals(input.step, "5", "step should be '5'");
+  assert_equals(input.valueAsNumber, 10, "valueAsNumber should be 10");
+
+  input.stepUp();
+  assert_equals(input.valueAsNumber, 15, "stepUp should increment by step");
+
+  input.stepDown();
+  assert_equals(input.valueAsNumber, 10, "stepDown should decrement by step");
+  cleanup();
+}, "Input: number type with min/max/step and stepUp/stepDown");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "range";
+  input.min = "0";
+  input.max = "100";
+  input.value = "50";
+
+  assert_equals(input.type, "range", "type should be 'range'");
+  assert_equals(input.valueAsNumber, 50, "valueAsNumber should be 50");
+  cleanup();
+}, "Input: range type valueAsNumber");
+
+// =============================================================
+// 3. Input Element — Attributes
+// Covers: html/semantics/forms/the-input-element/
+// =============================================================
+
+test(function () {
+  var input = document.createElement("input");
+  input.placeholder = "Enter name";
+  input.required = true;
+  input.readOnly = true;
+  input.disabled = true;
+
+  assert_equals(input.placeholder, "Enter name",
+    "placeholder should be set");
+  assert_true(input.required, "required should be true");
+  assert_true(input.readOnly, "readOnly should be true");
+  assert_true(input.disabled, "disabled should be true");
+  cleanup();
+}, "Input: placeholder, required, readOnly, disabled attributes");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 10;
+  input.minLength = 2;
+  input.pattern = "[A-Za-z]+";
+
+  assert_equals(input.maxLength, 10, "maxLength should be 10");
+  assert_equals(input.minLength, 2, "minLength should be 2");
+  assert_equals(input.pattern, "[A-Za-z]+",
+    "pattern should be '[A-Za-z]+'");
+  cleanup();
+}, "Input: maxLength, minLength, and pattern attributes");
+
+// =============================================================
+// 4. Constraint Validation API
+// Covers: html/semantics/forms/constraints/
+// =============================================================
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.required = true;
+  container.appendChild(input);
+
+  assert_false(input.validity.valid,
+    "Empty required input should be invalid");
+  assert_true(input.validity.valueMissing,
+    "valueMissing should be true for empty required input");
+
+  input.value = "hello";
+  assert_true(input.validity.valid,
+    "Filled required input should be valid");
+  assert_false(input.validity.valueMissing,
+    "valueMissing should be false after filling");
+  cleanup();
+}, "Validation: required field reports valueMissing");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "email";
+  input.value = "not-an-email";
+  container.appendChild(input);
+
+  assert_false(input.validity.valid,
+    "Invalid email should be invalid");
+  assert_true(input.validity.typeMismatch,
+    "typeMismatch should be true for invalid email");
+
+  input.value = "user@example.com";
+  assert_true(input.validity.valid,
+    "Valid email should be valid");
+  cleanup();
+}, "Validation: email type reports typeMismatch");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "number";
+  input.min = "10";
+  input.max = "20";
+  container.appendChild(input);
+
+  input.value = "5";
+  assert_true(input.validity.rangeUnderflow,
+    "Value below min should report rangeUnderflow");
+
+  input.value = "25";
+  assert_true(input.validity.rangeOverflow,
+    "Value above max should report rangeOverflow");
+
+  input.value = "15";
+  assert_true(input.validity.valid,
+    "Value within range should be valid");
+  cleanup();
+}, "Validation: number min/max reports rangeUnderflow/rangeOverflow");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.pattern = "^[0-9]{3}$";
+  container.appendChild(input);
+
+  input.value = "abc";
+  assert_true(input.validity.patternMismatch,
+    "Value not matching pattern should report patternMismatch");
+
+  input.value = "123";
+  assert_true(input.validity.valid,
+    "Value matching pattern should be valid");
+  cleanup();
+}, "Validation: pattern attribute reports patternMismatch");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.required = true;
+  container.appendChild(input);
+
+  assert_false(input.checkValidity(),
+    "checkValidity should return false for invalid input");
+
+  input.value = "filled";
+  assert_true(input.checkValidity(),
+    "checkValidity should return true for valid input");
+  cleanup();
+}, "Validation: checkValidity returns boolean validity");
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  container.appendChild(input);
+
+  input.setCustomValidity("Custom error");
+  assert_false(input.validity.valid,
+    "Custom validity should make input invalid");
+  assert_true(input.validity.customError,
+    "customError should be true");
+  assert_equals(input.validationMessage, "Custom error",
+    "validationMessage should match");
+
+  input.setCustomValidity("");
+  assert_true(input.validity.valid,
+    "Clearing custom validity should make input valid");
+  cleanup();
+}, "Validation: setCustomValidity sets and clears custom error");
+
+test(function () {
+  var form = document.createElement("form");
+  container.appendChild(form);
+  var input = document.createElement("input");
+  input.required = true;
+  form.appendChild(input);
+
+  assert_false(form.checkValidity(),
+    "Form checkValidity should return false when child is invalid");
+
+  input.value = "filled";
+  assert_true(form.checkValidity(),
+    "Form checkValidity should return true when all children valid");
+  cleanup();
+}, "Validation: form-level checkValidity aggregates child validity");
+
+// =============================================================
+// 5. Button Element
+// Covers: html/semantics/forms/the-button-element/
+// =============================================================
+
+test(function () {
+  var button = document.createElement("button");
+  assert_true(button instanceof HTMLButtonElement,
+    "Should be an HTMLButtonElement");
+  assert_equals(button.type, "submit",
+    "Default button type should be 'submit'");
+
+  button.type = "button";
+  assert_equals(button.type, "button",
+    "Button type should be settable to 'button'");
+
+  button.type = "reset";
+  assert_equals(button.type, "reset",
+    "Button type should be settable to 'reset'");
+  cleanup();
+}, "Button: element creation and type property");
+
+test(function () {
+  var button = document.createElement("button");
+  button.disabled = true;
+  assert_true(button.disabled, "disabled should be true");
+  assert_true(button.hasAttribute("disabled"),
+    "disabled attribute should be present in DOM");
+  cleanup();
+}, "Button: disabled attribute reflects correctly");
+
+// =============================================================
+// 6. Select Element
+// Covers: html/semantics/forms/the-select-element/
+// =============================================================
+
+test(function () {
+  var select = document.createElement("select");
+  assert_true(select instanceof HTMLSelectElement,
+    "Should be an HTMLSelectElement");
+
+  var opt1 = document.createElement("option");
+  opt1.value = "a";
+  opt1.textContent = "Option A";
+  var opt2 = document.createElement("option");
+  opt2.value = "b";
+  opt2.textContent = "Option B";
+  select.appendChild(opt1);
+  select.appendChild(opt2);
+
+  assert_equals(select.options.length, 2,
+    "options should have 2 items");
+  assert_equals(select.selectedIndex, 0,
+    "First option should be selected by default");
+  assert_equals(select.value, "a",
+    "value should match first option");
+
+  select.value = "b";
+  assert_equals(select.selectedIndex, 1,
+    "selectedIndex should update when value is set");
+  cleanup();
+}, "Select: option elements and selection behavior");
+
+test(function () {
+  var select = document.createElement("select");
+  select.multiple = true;
+  container.appendChild(select);
+
+  var opt1 = new Option("A", "a");
+  var opt2 = new Option("B", "b");
+  var opt3 = new Option("C", "c");
+  select.add(opt1);
+  select.add(opt2);
+  select.add(opt3);
+
+  opt1.selected = true;
+  opt3.selected = true;
+  assert_true(opt1.selected, "First option should be selected");
+  assert_false(opt2.selected, "Second option should not be selected");
+  assert_true(opt3.selected, "Third option should be selected");
+  cleanup();
+}, "Select: multiple selection mode");
+
+// =============================================================
+// 7. Textarea Element
+// Covers: html/semantics/forms/the-textarea-element/
+// =============================================================
+
+test(function () {
+  var textarea = document.createElement("textarea");
+  assert_true(textarea instanceof HTMLTextAreaElement,
+    "Should be an HTMLTextAreaElement");
+  assert_equals(textarea.value, "",
+    "Default value should be empty string");
+
+  textarea.value = "Hello\nWorld";
+  assert_equals(textarea.value, "Hello\nWorld",
+    "value should preserve newlines");
+  assert_equals(textarea.textLength, 11,
+    "textLength should match value length");
+  cleanup();
+}, "Textarea: value property and textLength");
+
+test(function () {
+  var textarea = document.createElement("textarea");
+  textarea.rows = 5;
+  textarea.cols = 40;
+  textarea.placeholder = "Enter text";
+
+  assert_equals(textarea.rows, 5, "rows should be 5");
+  assert_equals(textarea.cols, 40, "cols should be 40");
+  assert_equals(textarea.placeholder, "Enter text",
+    "placeholder should be set");
+  cleanup();
+}, "Textarea: rows, cols, and placeholder attributes");
+
+// =============================================================
+// 8. Fieldset and Legend Elements
+// Covers: html/semantics/forms/the-fieldset-element/
+// =============================================================
+
+test(function () {
+  var fieldset = document.createElement("fieldset");
+  assert_true(fieldset instanceof HTMLFieldSetElement,
+    "Should be an HTMLFieldSetElement");
+
+  var legend = document.createElement("legend");
+  legend.textContent = "Personal Info";
+  fieldset.appendChild(legend);
+
+  var input = document.createElement("input");
+  input.name = "name";
+  fieldset.appendChild(input);
+  container.appendChild(fieldset);
+
+  assert_equals(fieldset.elements.length, 1,
+    "fieldset.elements should contain 1 form control");
+  assert_equals(fieldset.elements[0].name, "name",
+    "fieldset.elements should contain the input");
+  cleanup();
+}, "Fieldset: elements collection includes form controls");
+
+test(function () {
+  var fieldset = document.createElement("fieldset");
+  var input = document.createElement("input");
+  fieldset.appendChild(input);
+  container.appendChild(fieldset);
+
+  fieldset.disabled = true;
+  assert_true(fieldset.disabled,
+    "fieldset should be disabled");
+  assert_true(input.matches(":disabled"),
+    "child input should match :disabled when fieldset is disabled");
+  cleanup();
+}, "Fieldset: disabled state propagates to child controls");
+
+// =============================================================
+// 9. Output Element
+// Covers: html/semantics/forms/the-output-element/
+// =============================================================
+
+test(function () {
+  var output = document.createElement("output");
+  assert_true(output instanceof HTMLOutputElement,
+    "Should be an HTMLOutputElement");
+  assert_equals(output.value, "",
+    "Default value should be empty string");
+  assert_equals(output.defaultValue, "",
+    "Default defaultValue should be empty string");
+
+  output.value = "42";
+  assert_equals(output.value, "42", "value should be '42'");
+  assert_equals(output.defaultValue, "",
+    "defaultValue should remain empty after setting value");
+  cleanup();
+}, "Output: value and defaultValue properties");
+
+// =============================================================
+// 10. FormData API
+// Covers: html/semantics/forms/the-form-element/
+// =============================================================
+
+test(function () {
+  var fd = new FormData();
+  fd.append("key1", "value1");
+  fd.append("key2", "value2");
+  fd.append("key1", "value3");
+
+  assert_true(fd.has("key1"), "Should have 'key1'");
+  assert_equals(fd.get("key1"), "value1",
+    "get should return first value for 'key1'");
+  assert_array_equals(fd.getAll("key1"), ["value1", "value3"],
+    "getAll should return all values for 'key1'");
+
+  fd.set("key1", "replaced");
+  assert_equals(fd.get("key1"), "replaced",
+    "set should replace all values for 'key1'");
+  assert_array_equals(fd.getAll("key1"), ["replaced"],
+    "getAll after set should return single value");
+
+  fd.delete("key2");
+  assert_false(fd.has("key2"),
+    "Should not have 'key2' after delete");
+  cleanup();
+}, "FormData: append, get, getAll, set, delete, has");
+
+test(function () {
+  var form = document.createElement("form");
+  container.appendChild(form);
+
+  var input1 = document.createElement("input");
+  input1.name = "user";
+  input1.value = "alice";
+  var input2 = document.createElement("input");
+  input2.name = "age";
+  input2.value = "30";
+  form.appendChild(input1);
+  form.appendChild(input2);
+
+  var fd = new FormData(form);
+  assert_equals(fd.get("user"), "alice",
+    "FormData from form should have 'user' value");
+  assert_equals(fd.get("age"), "30",
+    "FormData from form should have 'age' value");
+  cleanup();
+}, "FormData: constructed from form element captures values");
+
+// =============================================================
+// 11. Invalid Event
+// Covers: html/semantics/forms/constraints/
+// =============================================================
+
+test(function () {
+  var input = document.createElement("input");
+  input.type = "text";
+  input.required = true;
+  container.appendChild(input);
+
+  var invalidFired = false;
+  input.addEventListener("invalid", function () {
+    invalidFired = true;
+  });
+
+  input.checkValidity();
+  assert_true(invalidFired,
+    "invalid event should fire when checkValidity fails");
+  cleanup();
+}, "Validation: invalid event fires on checkValidity failure");
+
+// =============================================================
+// 12. Integration: Form with mixed controls and validation
+// Cross-feature test
+// =============================================================
+
+test(function () {
+  var form = document.createElement("form");
+  container.appendChild(form);
+
+  var text = document.createElement("input");
+  text.type = "text";
+  text.name = "name";
+  text.required = true;
+
+  var email = document.createElement("input");
+  email.type = "email";
+  email.name = "email";
+  email.required = true;
+
+  var select = document.createElement("select");
+  select.name = "role";
+  var opt1 = new Option("Admin", "admin");
+  var opt2 = new Option("User", "user");
+  select.add(opt1);
+  select.add(opt2);
+
+  var checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.name = "agree";
+  checkbox.required = true;
+
+  var submit = document.createElement("button");
+  submit.type = "submit";
+
+  form.appendChild(text);
+  form.appendChild(email);
+  form.appendChild(select);
+  form.appendChild(checkbox);
+  form.appendChild(submit);
+
+  // Form is invalid initially
+  assert_false(form.checkValidity(),
+    "Form should be invalid with empty required fields");
+
+  // Fill in values
+  text.value = "Alice";
+  email.value = "alice@example.com";
+  select.value = "admin";
+  checkbox.checked = true;
+
+  assert_true(form.checkValidity(),
+    "Form should be valid after filling all required fields");
+
+  // FormData should capture all values
+  var fd = new FormData(form);
+  assert_equals(fd.get("name"), "Alice", "name should be 'Alice'");
+  assert_equals(fd.get("email"), "alice@example.com",
+    "email should be captured");
+  assert_equals(fd.get("role"), "admin", "role should be 'admin'");
+  assert_equals(fd.get("agree"), "on",
+    "checked checkbox should have value 'on'");
+
+  assert_equals(form.elements.length, 5,
+    "form.elements should have 5 controls");
+  cleanup();
+}, "Integration: form with text, email, select, checkbox, and validation");
+</script>

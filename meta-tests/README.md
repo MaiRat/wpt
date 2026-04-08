@@ -20,14 +20,13 @@ existing granular tests in the repository.
 | **DOM** | `dom/` | Integrated DOM manipulation, traversal, and event tests |
 | **Graphics** | `graphics/` | SVG rendering, Canvas drawing, and image format tests |
 | **Media** | `media/` | Audio and video playback, codec, and API tests |
+| **Forms** | `forms/` | Input types, constraint validation, form submission |
+| **Web APIs** | `web-apis/` | Fetch, Web Storage, URL, Encoding, and Streams |
+| **Accessibility** | `accessibility/` | ARIA roles, states, properties, keyboard focus |
 
 ### Planned Categories (future work)
 
 - **JavaScript/ECMAScript** — High-level JS behavioral and compliance tests
-- **Web APIs** — Comprehensive functional coverage for Fetch, WebSockets,
-  Storage, Service Workers, etc.
-- **Accessibility** — ARIA, keyboard navigation, screen reader compatibility
-- **Forms** — Input handling, submission, validation
 - **Security** — CSP, CORS, and XSS vector tests
 - **Performance** — Macro-level benchmarks (TBD)
 
